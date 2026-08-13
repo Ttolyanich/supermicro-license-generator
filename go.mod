@@ -1,4 +1,4 @@
-module supermicro-web
+module supermicro-license-generator
 
 go 1.21
 

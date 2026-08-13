@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  supermicro-web:
+  supermicro-license-generator:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: supermicro-key-web
+    container_name: supermicro-license-generator
     restart: unless-stopped
     ports:
       - "8080:8080"

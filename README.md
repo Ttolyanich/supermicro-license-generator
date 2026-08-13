@@ -1,72 +1,44 @@
-# Supermicro Product Key Web App (Docker)
+# Supermicro License Generator & SUM Activator
 
-Красивый и удобный веб-интерфейс для генерации, декодирования и управления лицензионными ключами Supermicro BMC / IPMI на базе утилиты [zsrv/supermicro-product-key](https://github.com/zsrv/supermicro-product-key).
+Красивое веб-приложение в Docker для генерации, авто-активации по IP и управления лицензионными ключами Supermicro BMC / IPMI на базе [zsrv/supermicro-product-key](https://github.com/zsrv/supermicro-product-key) и встроенной утилиты **SUM 2.15**.
 
 ![Docker Ready](https://img.shields.io/badge/Docker-Ready-blue)
 ![Go](https://img.shields.io/badge/Go-1.21-00ADD8)
+![SUM 2.15](https://img.shields.io/badge/SUM-2.15.0-green)
 
 ---
 
-## ⚡ Возможности
+## ⚡ Два режима работы
 
-- **Автоматическая генерация всех типов ключей в 1 клик:**
-  - `SFT-OOB-LIC` — ключ управления OOB (BIOS Update, RAID, HTML5 KVM для систем X9, X10, X11).
-  - `SFT-DCMS-SINGLE` — полный пакет лицензий Data Center Management Suite (ALL).
-  - `SFT-SUM-LIC` — утилита Supermicro Update Manager.
-  - `SFT-SPM-LIC` — Supermicro Power Manager.
-  - `SFT-SCM-LIC` — Supermicro Cloud Manager.
-  - `SFT-DCMS-SITE`, `SFT-DCMS-CALL-HOME`, `SFT-DCMS-SVC-KEY`, `SFT-SDDC-SINGLE`.
-- **Генератор CLI команд SUM:** автоматическое формирование команд типа `./sum -i <IP> -u ADMIN -p ADMIN -c ActivateProductKey --key <KEY>`.
-- **Декодер Non-JSON ключей:** просмотр свойств зашифрованного ключа (SKU, дата создания, контрольная сумма).
-- **Подбор MAC-адреса (Bruteforce):** поиск исходного MAC по OOB или Non-JSON ключу.
-- **Современный интерфейс:** Dark Mode, стеклянный дизайн (Glassmorphism), быстрый поиск, копирование в один клик.
+1. **🚀 Вариант 1: Полная Авто-Активация по IP (С авто-чтением MAC через SUM & Redfish)**
+   - Подключается по IP-адресу BMC (`93.185.65.54`), логину и паролю.
+   - Сам считывает **BMC MAC address** с главной страницы/Redfish.
+   - Сгенерирует лицензию (например `SFT-DCMS-SINGLE`).
+   - Запускает утилиту SUM внутри контейнера и автоматически активирует ключ на сервере.
+
+2. **⚡ Вариант 2: Ручной Генератор по MAC (Без авторизации)**
+   - Принимает MAC в любом формате (с двоеточиями `ac:1f:6b:e4:b1:fa`, дефисами, пробелами или слитной строкой `ac1f6be4b1fa`).
+   - Автоматически очищает MAC-адрес и проверяет валидность.
+   - Выдает все ключи (`SFT-OOB-LIC`, `SFT-DCMS-SINGLE`, `SFT-SUM-LIC`, `SFT-SPM-LIC`, `SFT-SCM-LIC`, `SFT-SDDC-SINGLE`) с кнопками копирования в 1 клик.
 
 ---
 
 ## 🚀 Быстрый запуск в Docker
 
-### Вариант 1: Через Docker Compose (Рекомендуется)
-
 ```bash
-cd supermicro-web
+cd supermicro-license-generator
 docker compose up -d --build
 ```
 
-Веб-интерфейс будет доступен по адресу: **`http://localhost:8080`**
-
-### Вариант 2: Через Docker CLI
-
-```bash
-docker build -t supermicro-web .
-docker run -d -p 8080:8080 --name supermicro-key-web supermicro-web
-```
+Веб-интерфейс доступен по адресу: **`http://localhost:8080`**
 
 ---
 
-## 🛠️ Запуск без Docker (Локальный Go)
-
-Если на машине установлен Go 1.21+:
+## 📤 Публикация в Git
 
 ```bash
-cd supermicro-web
-go run main.go
-```
-
-Приложение откроется на порту `8080`.
-
----
-
-## 📁 Структура проекта
-
-```text
-supermicro-web/
-├── Dockerfile            # Многоэтапная сборка (Multi-stage build)
-├── docker-compose.yml    # Конфигурация для запуска одной командой
-├── main.go               # REST API & Web-сервер на Go
-├── go.mod                # Модуль Go с привязкой к upstream библиотеке
-├── static/               # Фронтенд (HTML5 / Vanilla CSS / JS)
-│   ├── index.html
-│   ├── style.css
-│   └── app.js
-└── upstream/             # Исходный код zsrv/supermicro-product-key
+cd supermicro-license-generator
+git remote add origin https://github.com/ВАШ_ЛОГИН/supermicro-license-generator.git
+git branch -M main
+git push -u origin main
 ```
