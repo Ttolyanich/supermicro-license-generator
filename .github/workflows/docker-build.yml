@@ -3,6 +3,7 @@ name: Build Docker Image and Windows Executable
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   workflow_dispatch:
 
 permissions:
@@ -49,7 +50,6 @@ jobs:
             ### 🐳 Docker Container
             `docker pull ghcr.io/ttolyanich/supermicro-license-generator:latest`
           files: supermicro-license-generator.exe
-          make_latest: "true"
 
   build-docker:
     name: Build and Push Docker Image
