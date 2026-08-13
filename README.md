@@ -1,72 +1,107 @@
 # Supermicro License Generator & SUM Activator ⚡
 
-Универсальный веб-генератор и автоматический активатор лицензионных ключей Supermicro BMC / IPMI в Docker и в виде **автономного `.exe` приложения для Windows** на базе [zsrv/supermicro-product-key](https://github.com/zsrv/supermicro-product-key) и утилиты **Supermicro Update Manager (SUM 2.15.0)**.
+Веб-генератор и автоматический активатор лицензионных ключей Supermicro BMC / IPMI. Работает в Docker и как **автономное `.exe` приложение для Windows**. Криптографическое ядро — [zsrv/supermicro-product-key](https://github.com/zsrv/supermicro-product-key); активация выполняется утилитой **Supermicro Update Manager (SUM 2.15.0)**.
 
 ![Docker Ready](https://img.shields.io/badge/Docker-Ready-blue)
 ![Go](https://img.shields.io/badge/Go-1.21-00ADD8)
 ![SUM 2.15](https://img.shields.io/badge/SUM-2.15.0-green)
-[![Download EXE](https://img.shields.io/badge/Download-Windows--EXE-0078D6?logo=windows&logoColor=white)](https://github.com/Ttolyanich/supermicro-license-generator/releases/download/v1.0.0/supermicro-license-generator.exe)
+[![Download EXE](https://img.shields.io/badge/Download-Windows--EXE-0078D6?logo=windows&logoColor=white)](https://github.com/Ttolyanich/supermicro-license-generator/releases/latest)
 
 ---
 
-## 💾 Прямые ссылки на скачивание (Windows)
+## 💾 Скачивание
 
-- 📥 **[Скачать supermicro-license-generator.exe (Прямая ссылка v1.0.0)](https://github.com/Ttolyanich/supermicro-license-generator/releases/download/v1.0.0/supermicro-license-generator.exe)**
-- 📦 **[Перейти к странице релизов (GitHub Releases)](https://github.com/Ttolyanich/supermicro-license-generator/releases)**
-- ☁️ **[Скачать SUM 2.15.0 для Windows (Google Drive Зеркало)](https://drive.google.com/file/d/1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli/view?usp=sharing)**
+- 📥 **[supermicro-license-generator.exe (последний релиз)](https://github.com/Ttolyanich/supermicro-license-generator/releases/latest)** — автономное Windows-приложение.
+- 📦 **[Страница релизов (GitHub Releases)](https://github.com/Ttolyanich/supermicro-license-generator/releases)**
+- 🐳 **Docker-образ:** `ghcr.io/ttolyanich/supermicro-license-generator:latest`
+
+> **Утилита SUM в проект НЕ входит** — это проприетарное ПО Supermicro, не подлежащее распространению. Скачайте её самостоятельно и выберите сборку под свою ОС (Windows или Linux):
+> - Официальный источник: [store.supermicro.com — Software License Key Activation](https://store.supermicro.com/software/software-license-key-activation-usage)
+> - Зеркало (Google Drive): [SUM 2.15.0](https://drive.google.com/file/d/1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli/view?usp=sharing)
 
 ---
 
 ## 📌 О проекте
 
-Проект разработан на базе утилиты [zsrv/supermicro-product-key](https://github.com/zsrv/supermicro-product-key) и полностью расширен графическим веб-интерфейсом, автоматическим считыванием MAC-адресов с BMC, очистителем MAC-форматов и встроенным исполнителем утилиты Supermicro SUM (Linux & Windows).
+Обёртка над [zsrv/supermicro-product-key](https://github.com/zsrv/supermicro-product-key) с графическим веб-интерфейсом: автоматическое считывание MAC-адреса с BMC (через SUM, IPMI Web CGI и Redfish), нормализация формата MAC, генерация ключей и запуск активации через SUM.
 
-- **Официальный репозиторий:** [https://github.com/Ttolyanich/supermicro-license-generator](https://github.com/Ttolyanich/supermicro-license-generator)
+- **Репозиторий:** [https://github.com/Ttolyanich/supermicro-license-generator](https://github.com/Ttolyanich/supermicro-license-generator)
 
 ---
 
-## ⚡ 2 Режима работы
+## ⚡ Режимы работы
 
-### 🚀 Вариант 1: Полная Авто-Активация по IP (Авто-чтение MAC через SUM & Redfish)
-1. Введите IP-адрес BMC сервера (`93.185.65.54`), логин и пароль IPMI (default: `ADMIN`/`ADMIN`).
-2. Приложение само подключается к контроллеру, считывает **BMC MAC address** с главной страницы BMC / через Redfish API.
+### 🚀 Вариант 1: Авто-активация по IP
+1. Введите IP-адрес BMC (например `192.0.2.10`), логин и пароль IPMI (по умолчанию `ADMIN`/`ADMIN`). MAC можно указать вручную — тогда обращение к BMC за MAC пропускается.
+2. Приложение считывает **BMC MAC** через SUM `GetBmcInfo`, страницу IPMI Web CGI или Redfish API.
 3. Генерирует выбранную лицензию (например `SFT-DCMS-SINGLE`).
-4. Автоматически запускает утилиту `SUM` и выполняет команду `ActivateProductKey`.
-5. Выводит статус «УСПЕХ» и полный лог ответа SUM в реальном времени.
+4. Запускает `SUM` с командой `ActivateProductKey` (нужен установленный SUM — см. ниже).
+5. Показывает статус и полный лог ответа SUM.
 
-### ⚡ Вариант 2: Ручной Генератор по MAC (Без авторизации)
-1. Введите MAC-адрес в **абсолютно любом формате** (`ac:1f:6b:e4:b1:fa`, `ac-1f-6b-e4-b1-fa`, `ac1f6be4b1fa`).
-2. Бэкенд автоматически удалит двоеточия, дефисы и пробелы, проверит валидность 12 hex-символов.
-3. Моментально сгенерирует все ключи (`SFT-OOB-LIC`, `SFT-DCMS-SINGLE`, `SFT-SUM-LIC`, `SFT-SPM-LIC`, `SFT-SCM-LIC`, `SFT-SDDC-SINGLE`) с кнопками копирования в один клик.
+### ⚡ Вариант 2: Ручной генератор по MAC (без авторизации)
+1. Введите MAC-адрес в **любом формате** (`ac:1f:6b:e4:b1:fa`, `ac-1f-6b-e4-b1-fa`, `ac1f6be4b1fa`).
+2. Бэкенд удалит разделители и проверит валидность (12 hex-символов).
+3. Сгенерирует все ключи (`SFT-OOB-LIC`, `SFT-DCMS-SINGLE`, `SFT-SUM-LIC`, `SFT-SPM-LIC`, `SFT-SCM-LIC`, `SFT-SDDC-SINGLE` и др.) с копированием в один клик.
 
----
-
-## 🖥️ Автономное `.exe` Приложение для Windows (Без Docker)
-
-Весь веб-интерфейс (HTML/CSS/JS) зашит **прямо внутрь одного `.exe` файла**. Ему не требуются внешние папки или установка стороннего ПО.
-
-### Быстрый запуск на Windows:
-
-1. Скачайте файл **[supermicro-license-generator.exe](https://github.com/Ttolyanich/supermicro-license-generator/releases/download/v1.0.0/supermicro-license-generator.exe)**.
-2. Убедитесь, что папка `sum_2.15.0_Win_x86_64` (содержит `sum.exe`) находится в одной директории с `.exe` файлом.
-3. Запустите **`supermicro-license-generator.exe`** двойным кликом.
-4. Приложение автоматически поднимет веб-сервер и **само откроет ваш браузер** по адресу `http://localhost:8080`!
+### 🔍 Вариант 3: Декодер и Bruteforce
+Декодирование атрибутов зашифрованного ключа и подбор MAC по имеющемуся ключу в пределах OUI-блоков Supermicro.
 
 ---
 
-## 🐳 Запуск в Docker (Linux / Сервер)
+## 🖥️ Автономное `.exe` для Windows (без Docker)
+
+Весь веб-интерфейс (HTML/CSS/JS) вшит **внутрь `.exe`** через `//go:embed` — внешние папки не нужны.
+
+1. Скачайте **[supermicro-license-generator.exe](https://github.com/Ttolyanich/supermicro-license-generator/releases/latest)**.
+2. Для генерации/декодирования ключей SUM не требуется. Для **активации** положите рядом с `.exe` папку `sum_2.15.0_Win_x86_64` (с `sum.exe`), скачанную по ссылкам выше, либо укажите путь через переменную `SUM_PATH`.
+3. Запустите `.exe` двойным кликом.
+4. Приложение поднимет локальный веб-сервер на `http://localhost:8080` и откроет браузер.
+
+По умолчанию сервер слушает только `127.0.0.1` (localhost) — из сети он недоступен. Чтобы изменить, задайте `HOST` и `PORT`.
+
+---
+
+## 🐳 Запуск в Docker (Linux / сервер)
 
 ```bash
 git clone https://github.com/Ttolyanich/supermicro-license-generator.git
 cd supermicro-license-generator
 docker compose up -d --build
 ```
-Веб-интерфейс откроется по адресу: **`http://localhost:8080`**
 
-Или используйте готовый образ из GitHub Packages:
+Интерфейс: **`http://localhost:8080`** (в `docker-compose.yml` порт по умолчанию привязан к `127.0.0.1`).
+
+Готовый образ:
 ```bash
-docker run -d -p 8080:8080 --name supermicro-license-generator ghcr.io/ttolyanich/supermicro-license-generator:latest
+docker run -d -p 127.0.0.1:8080:8080 --name supermicro-license-generator \
+  ghcr.io/ttolyanich/supermicro-license-generator:latest
 ```
+
+**Активация через SUM в Docker.** Бинарник SUM в образ не встроен. Смонтируйте его и укажите `SUM_PATH` (по умолчанию `/app/sum_tool/sum`):
+```bash
+docker run -d -p 127.0.0.1:8080:8080 \
+  -v /opt/sum_2.15.0_Linux_x86_64:/app/sum_tool:ro \
+  ghcr.io/ttolyanich/supermicro-license-generator:latest
+```
+Без SUM работают генерация ключей, декодирование и чтение MAC через Redfish/IPMI Web.
+
+---
+
+## 🔒 Безопасность
+
+Эндпоинты активации подключаются к любому указанному IP с переданными учётными данными и возвращают фрагменты ответа — это по сути инструмент обращения к BMC, поэтому:
+
+- Сервер по умолчанию слушает **только localhost** (кроме Docker, где `HOST=0.0.0.0`, а наружу порт привязан к `127.0.0.1`).
+- Для доступа из сети включите HTTP Basic Auth: задайте `BASIC_AUTH_USER` и `BASIC_AUTH_PASS`.
+- Запросы к API с других сайтов блокируются (проверка `Sec-Fetch-Site`/`Origin` и `Content-Type: application/json`).
+
+| Переменная | По умолчанию | Назначение |
+|------------|--------------|------------|
+| `HOST` | `127.0.0.1` | Интерфейс прослушивания (`0.0.0.0` — все) |
+| `PORT` | `8080` | Порт |
+| `SUM_PATH` | — | Путь к бинарнику SUM |
+| `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | — | Включают Basic Auth, если заданы |
+| `NO_BROWSER` | — | Любое значение отключает авто-открытие браузера |
 
 ---
 
@@ -74,23 +109,26 @@ docker run -d -p 8080:8080 --name supermicro-license-generator ghcr.io/ttolyanic
 
 ```text
 supermicro-license-generator/
-├── .github/workflows/docker-build.yml # Автоматическая сборка Docker образа & Windows .exe Release
-├── Dockerfile                          # Многоэтапная сборка контейнера (Debian + SUM Linux)
+├── .github/workflows/docker-build.yml  # Сборка Docker-образа и Windows .exe
+├── Dockerfile                          # Многоэтапная сборка (Debian runtime)
 ├── docker-compose.yml                  # Конфигурация запуска контейнера
 ├── main.go                             # REST API на Go с вшитым фронтендом (//go:embed)
 ├── run_windows.bat                     # Лаунчер для Windows
-├── static/                             # Веб-интерфейс (HTML5 / Vanilla CSS / JS)
+├── static/                             # Веб-интерфейс (HTML / CSS / JS)
 │   ├── index.html
 │   ├── style.css
 │   └── app.js
-├── sum_2.15.0_Win_x86_64/              # Компоненты SUM 2.15 для Windows (sum.exe)
-└── upstream/                           # Криптографический модуль zsrv/supermicro-product-key
+└── upstream/                           # Криптоядро zsrv/supermicro-product-key (vendored)
 ```
+
+> Папки `sum_2.15.0_*` намеренно исключены из репозитория (`.gitignore`) — это проприетарные бинарники SUM, которые нужно скачать отдельно.
 
 ---
 
-## 📜 Лицензия и Отказ от ответственности
+## 📜 Лицензия, атрибуция и отказ от ответственности
 
-Проект распространяется под лицензией **MIT License**. См. файл `LICENSE`.
+Собственный код этого проекта (`main.go`, `static/`, Docker/CI-конфигурация) распространяется под **MIT License** (см. `LICENSE`).
 
-*Дисклеймер: Этот инструмент предназначен для системного администрирования собственным оборудованием Supermicro. Автор не несет ответственности за любое использование данного программного обеспечения.*
+Каталог `upstream/` — копия проекта [zsrv/supermicro-product-key](https://github.com/zsrv/supermicro-product-key). На момент включения оригинальный репозиторий не содержал файла лицензии; авторские права принадлежат его автору, и MIT данного проекта на код в `upstream/` не распространяется. **Supermicro Update Manager (SUM)** — проприетарное ПО Supermicro, в репозиторий не входит и распространяется по собственной лицензии Supermicro.
+
+*Дисклеймер: инструмент предназначен для системного администрирования собственного оборудования Supermicro. Автор не несёт ответственности за использование данного ПО.*

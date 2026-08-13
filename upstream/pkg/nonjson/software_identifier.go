@@ -9,13 +9,13 @@ var SoftwareIdentifiers = newSoftwareIdentifierRegistry()
 
 type SoftwareIdentifier struct {
 	// SKU is the value that refers to a specific license in Supermicro documentation.
-	SKU string
+	SKU string `json:"sku"`
 	// DisplayName is the string identifier refers to the license type, and is stored
 	// in the product key.
-	DisplayName string
+	DisplayName string `json:"display_name"`
 	// ID is the numeric identifier that refers to the license type, and is stored
 	// in the product key.
-	ID byte
+	ID byte `json:"id"`
 }
 
 func (sid *SoftwareIdentifier) Byte() byte {

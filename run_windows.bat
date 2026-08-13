@@ -6,9 +6,10 @@ echo  Supermicro License Generator & SUM Activator 2.15 (Windows)
 echo =========================================================================
 echo.
 
+rem The app opens the browser itself once the server is up, so we do not
+rem launch it here (that would open a second, empty tab).
 if exist "supermicro-license-generator.exe" (
     echo [OK] Starting local server via supermicro-license-generator.exe...
-    start "" http://localhost:8080
     supermicro-license-generator.exe
     goto :end
 )
@@ -16,7 +17,6 @@ if exist "supermicro-license-generator.exe" (
 where go >nul 2>nul
 if %errorlevel% equ 0 (
     echo [OK] Go compiler detected. Launching via go run main.go...
-    start "" http://localhost:8080
     go run main.go
     goto :end
 )

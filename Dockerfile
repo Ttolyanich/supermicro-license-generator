@@ -11,14 +11,13 @@ COPY static ./static
 
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o supermicro-license-generator main.go
 
-# Debian slim runtime for full Linux glibc compatibility with Supermicro SUM binary
+# Debian slim runtime for full Linux glibc compatibility with the Supermicro
+# SUM binary (which is not statically linked).
 FROM debian:bookworm-slim
 
+# ca-certificates is required for the Redfish/IPMI Web HTTPS calls the app makes.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    curl \
-    unzip \
-    procps \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -26,18 +25,21 @@ WORKDIR /app
 COPY --from=builder /app/supermicro-license-generator .
 COPY --from=builder /app/static ./static
 
-# Optional SUM download (resilient, does not fail build if network is restricted)
-RUN mkdir -p /app/sum_tool && \
-    (curl -sSL "https://drive.google.com/uc?export=download&id=1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli&confirm=t" -o /tmp/sum.zip || true) && \
-    (unzip -q /tmp/sum.zip -d /tmp/sum_out 2>/dev/null || true) && \
-    (cp -r /tmp/sum_out/*/* /app/sum_tool/ 2>/dev/null || true) && \
-    (chmod +x /app/sum_tool/sum 2>/dev/null || true) && \
-    (ln -s /app/sum_tool/sum /app/sum 2>/dev/null || true) && \
-    rm -rf /tmp/sum*
-
 EXPOSE 8080
 
 ENV PORT=8080
-ENV SUM_PATH=/app/sum
+# Publish on all interfaces inside the container so the mapped port is reachable.
+ENV HOST=0.0.0.0
+# Headless container: do not attempt to launch a browser.
+ENV NO_BROWSER=1
+# Key generation, decoding and MAC reading (Redfish/IPMI Web) work out of the
+# box. Direct SUM activation additionally needs the proprietary SUM binary,
+# which is NOT bundled (it is not redistributable). Mount it as a volume and
+# point SUM_PATH at it, e.g.:
+#   docker run -p 8080:8080 \
+#     -v /opt/sum_2.15.0_Linux_x86_64:/app/sum_tool:ro \
+#     ghcr.io/ttolyanich/supermicro-license-generator:latest
+# The image looks for the binary at SUM_PATH first, then /app/sum_tool/sum.
+ENV SUM_PATH=/app/sum_tool/sum
 
 CMD ["./supermicro-license-generator"]

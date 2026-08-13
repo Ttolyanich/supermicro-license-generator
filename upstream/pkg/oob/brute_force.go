@@ -1,6 +1,7 @@
 package oob
 
 import (
+	"context"
 	"errors"
 
 	"github.com/rs/zerolog/log"
@@ -24,16 +25,39 @@ var SupermicroMACAddressBlocks = [][3]byte{
 // BruteForceMACAddress returns the MAC address associated with the
 // product key, or an error if one occurs or the MAC address was not found.
 func BruteForceMACAddress(productKey string) (string, error) {
+	return BruteForceMACAddressContext(context.Background(), productKey)
+}
+
+// BruteForceMACAddressContext behaves like BruteForceMACAddress but stops
+// searching as soon as ctx is cancelled, returning ctx.Err(). This lets a
+// caller bound the CPU cost of a search (e.g. a request timeout) instead of
+// letting the worker goroutines run to completion. The channels are buffered
+// so cancelled workers never block on send and are free to return.
+func BruteForceMACAddressContext(ctx context.Context, productKey string) (string, error) {
 	pk, err := ParseProductKey(productKey)
 	if err != nil {
 		return "", err
 	}
 
-	brute := func(macBlock [3]byte, result chan netinternal.HardwareAddr, done chan bool) {
+	blocks := SupermicroMACAddressBlocks
+	result := make(chan netinternal.HardwareAddr, 1)
+	done := make(chan bool, len(blocks))
+
+	brute := func(macBlock [3]byte) {
 		log.Debug().Msgf("searching mac address block %X", macBlock)
 
 		mac := make(netinternal.HardwareAddr, 6)
 		for one := 0; one <= 255; one++ {
+			// Check for cancellation once per outer iteration (~65k inner
+			// iterations), which keeps the search responsive within
+			// milliseconds without measurable per-key overhead.
+			select {
+			case <-ctx.Done():
+				done <- true
+				return
+			default:
+			}
+
 			for two := 0; two <= 255; two++ {
 				for three := 0; three <= 255; three++ {
 					mac[0] = macBlock[0]
@@ -51,7 +75,7 @@ func BruteForceMACAddress(productKey string) (string, error) {
 					m := make(netinternal.HardwareAddr, len(mac))
 					copy(m, mac)
 					result <- m
-					done <- true
+					return
 				}
 			}
 		}
@@ -60,19 +84,18 @@ func BruteForceMACAddress(productKey string) (string, error) {
 		done <- true
 	}
 
-	result := make(chan netinternal.HardwareAddr)
-	done := make(chan bool)
-
-	for _, macBlock := range SupermicroMACAddressBlocks {
-		go brute(macBlock, result, done)
+	for _, macBlock := range blocks {
+		go brute(macBlock)
 	}
 
-	for range SupermicroMACAddressBlocks {
+	for range blocks {
 		select {
 		case resultMAC := <-result:
 			return resultMAC.String(), nil
 		case <-done:
 			continue
+		case <-ctx.Done():
+			return "", ctx.Err()
 		}
 	}
 

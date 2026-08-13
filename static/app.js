@@ -1,9 +1,38 @@
 document.addEventListener('DOMContentLoaded', () => {
-  // DOM Elements
-  const tabBtns = document.querySelectorAll('.tab-btn');
-  const tabContents = document.querySelectorAll('.tab-content');
+  // Mobile sidebar toggle
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggle = document.getElementById('sidebar-toggle');
 
-  // Mode 1: Auto Activation elements
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  // View Navigation Tabs
+  const navItems = document.querySelectorAll('.nav-item');
+  const viewPanels = document.querySelectorAll('.view-panel');
+
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      navItems.forEach(i => i.classList.remove('active'));
+      viewPanels.forEach(p => p.classList.remove('active'));
+
+      item.classList.add('active');
+      const targetView = item.dataset.view;
+      const targetPanel = document.getElementById(targetView);
+      if (targetPanel) {
+        targetPanel.classList.add('active');
+      }
+
+      // Close mobile sidebar on selection
+      if (sidebar) {
+        sidebar.classList.remove('open');
+      }
+    });
+  });
+
+  // View 1: Auto Activation Elements
   const autoIp = document.getElementById('auto-ip');
   const autoUser = document.getElementById('auto-user');
   const autoPass = document.getElementById('auto-pass');
@@ -18,12 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCopyAutoKey = document.getElementById('btn-copy-auto-key');
   const autoLogOutput = document.getElementById('auto-log-output');
 
-  // Mode 2: Manual MAC Generator elements
+  // View 2: Manual MAC Generator Elements
   const macInput = document.getElementById('mac-input');
-  const btnClearMac = document.getElementById('btn-clear-mac');
   const btnGenerate = document.getElementById('btn-generate');
-  const presetChips = document.querySelectorAll('.preset-chip');
-
+  const presetChips = document.querySelectorAll('.chip');
   const resultsContainer = document.getElementById('results-container');
   const metaMacRaw = document.getElementById('meta-mac-raw');
   const metaMacFmt = document.getElementById('meta-mac-fmt');
@@ -31,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCopyAll = document.getElementById('btn-copy-all');
   const keysGrid = document.getElementById('keys-grid');
 
-  // Mode 3: Decoder & Bruteforce elements
+  // View 3: Decoder & Bruteforce Elements
   const decodeMac = document.getElementById('decode-mac');
   const decodeKey = document.getElementById('decode-key');
   const btnDecode = document.getElementById('btn-decode');
@@ -46,93 +73,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentGeneratedData = null;
 
-  // Tab switching
-  tabBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      tabBtns.forEach(b => b.classList.remove('active'));
-      tabContents.forEach(c => c.classList.remove('active'));
-
-      btn.classList.add('active');
-      const targetId = btn.dataset.tab;
-      document.getElementById(targetId).classList.add('active');
-    });
-  });
-
   // ==========================================
-  // MODE 1: Auto Activation by IP & Credentials
+  // VIEW 1: Auto Activation by IP & Credentials
   // ==========================================
-  btnAutoActivate.addEventListener('click', async () => {
-    const ip = autoIp.value.trim();
-    const username = autoUser.value.trim() || 'ADMIN';
-    const password = autoPass.value.trim() || 'ADMIN';
-    const mac = autoMac ? autoMac.value.trim() : '';
-    const sku = autoSku.value;
+  if (btnAutoActivate) {
+    btnAutoActivate.addEventListener('click', async () => {
+      const ip = autoIp.value.trim();
+      const username = autoUser.value.trim() || 'ADMIN';
+      const password = autoPass.value.trim() || 'ADMIN';
+      const mac = autoMac ? autoMac.value.trim() : '';
+      const sku = autoSku.value;
 
-    if (!ip) {
-      showToast('Пожалуйста, введите IP-адрес BMC сервера', 'error');
-      autoIp.focus();
-      return;
-    }
-
-    btnAutoActivate.disabled = true;
-    btnAutoActivate.innerHTML = `<span class="btn-icon">⌛</span> Подключение и Активация...`;
-    autoResultContainer.classList.add('hidden');
-
-    try {
-      const resp = await fetch('/api/auto-activate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip, username, password, mac, sku })
-      });
-
-      const data = await resp.json();
-
-      autoResultContainer.classList.remove('hidden');
-      autoLogOutput.textContent = data.output || data.error || 'Лог не получен';
-
-      if (data.success) {
-        autoMetaMacFmt.textContent = data.mac_formatted || '-';
-        autoMetaMacClean.textContent = data.mac_clean || '-';
-        autoMetaSku.textContent = data.sku || sku;
-        autoGeneratedKeyText.textContent = data.generated_key || '-';
-        autoLogOutput.style.color = '#34d399';
-
-        btnCopyAutoKey.onclick = () => {
-          copyToClipboard(data.generated_key, 'Ключ скопирован!');
-        };
-
-        showToast('Активация через SUM успешно завершена!', 'success');
-      } else {
-        autoMetaMacFmt.textContent = data.mac_formatted || 'Не определен';
-        autoMetaMacClean.textContent = data.mac_clean || 'Ошибка';
-        autoMetaSku.textContent = sku;
-        autoGeneratedKeyText.textContent = data.generated_key || 'Ошибка активации';
-        autoLogOutput.style.color = '#fca5a5';
-
-        showToast(data.error || 'Ошибка при автоматической активации', 'error');
+      if (!ip) {
+        showToast('Пожалуйста, введите IP-адрес BMC сервера', 'error');
+        autoIp.focus();
+        return;
       }
 
-      autoResultContainer.scrollIntoView({ behavior: 'smooth' });
-    } catch (err) {
-      showToast('Ошибка обращения к бэкенду: ' + err.message, 'error');
-    } finally {
-      btnAutoActivate.disabled = false;
-      btnAutoActivate.innerHTML = `<span class="btn-icon">⚡</span> Считать/Указать MAC + Сгенерировать Ключ + Активировать через SUM`;
-    }
-  });
+      btnAutoActivate.disabled = true;
+      btnAutoActivate.innerHTML = `⌛ Подключение и Активация...`;
+      autoResultContainer.classList.add('hidden');
 
+      try {
+        const resp = await fetch('/api/auto-activate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip, username, password, mac, sku })
+        });
+
+        const data = await resp.json();
+        autoResultContainer.classList.remove('hidden');
+        autoLogOutput.textContent = data.output || data.error || 'Лог не получен';
+
+        if (data.success) {
+          autoMetaMacFmt.textContent = data.mac_formatted || '-';
+          autoMetaMacClean.textContent = data.mac_clean || '-';
+          autoMetaSku.textContent = data.sku || sku;
+          autoGeneratedKeyText.textContent = data.generated_key || '-';
+          autoLogOutput.style.color = '#a7f3d0';
+
+          btnCopyAutoKey.onclick = () => {
+            copyToClipboard(data.generated_key, 'Ключ скопирован!');
+          };
+
+          showToast('Активация через SUM успешно завершена!', 'success');
+        } else {
+          autoMetaMacFmt.textContent = data.mac_formatted || 'Не определен';
+          autoMetaMacClean.textContent = data.mac_clean || 'Ошибка';
+          autoMetaSku.textContent = sku;
+          autoGeneratedKeyText.textContent = data.generated_key || 'Ошибка активации';
+          autoLogOutput.style.color = '#fca5a5';
+
+          showToast(data.error || 'Ошибка при автоматической активации', 'error');
+        }
+
+        autoResultContainer.scrollIntoView({ behavior: 'smooth' });
+      } catch (err) {
+        showToast('Ошибка обращения к бэкенду: ' + err.message, 'error');
+      } finally {
+        btnAutoActivate.disabled = false;
+        btnAutoActivate.innerHTML = `⚡ Считать/Указать MAC + Сгенерировать Ключ + Активировать через SUM`;
+      }
+    });
+  }
 
   // ==========================================
-  // MODE 2: Manual MAC Generator (Sanitizer)
+  // VIEW 2: Manual MAC Generator
   // ==========================================
-
-  // Clear MAC
-  btnClearMac.addEventListener('click', () => {
-    macInput.value = '';
-    macInput.focus();
-  });
-
-  // Preset chips
   presetChips.forEach(chip => {
     chip.addEventListener('click', () => {
       macInput.value = chip.dataset.mac;
@@ -140,11 +147,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Generate button
-  btnGenerate.addEventListener('click', generateKeys);
-  macInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') generateKeys();
-  });
+  if (btnGenerate) {
+    btnGenerate.addEventListener('click', generateKeys);
+  }
+  if (macInput) {
+    macInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') generateKeys();
+    });
+  }
 
   async function generateKeys() {
     const rawMac = macInput.value.trim();
@@ -155,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     btnGenerate.disabled = true;
-    btnGenerate.innerHTML = `<span class="btn-icon">⌛</span> Очистка & Генерация...`;
+    btnGenerate.innerHTML = `⌛ Очистка & Генерация...`;
 
     try {
       const resp = await fetch('/api/generate', {
@@ -181,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Ошибка обращения к API серверу: ' + err.message, 'error');
     } finally {
       btnGenerate.disabled = false;
-      btnGenerate.innerHTML = `<span class="btn-icon">⚡</span> Сгенерировать ключи`;
+      btnGenerate.innerHTML = `⚡ Сгенерировать`;
     }
   }
 
@@ -190,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
     metaMacFmt.textContent = data.mac_formatted;
     metaMacClean.textContent = data.mac_clean;
 
-    decodeMac.value = data.mac_clean;
+    if (decodeMac) decodeMac.value = data.mac_clean;
 
     keysGrid.innerHTML = '';
     data.keys.forEach(k => {
@@ -201,23 +211,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const badgeClass = isOOB ? 'badge-info' : 'badge-success';
 
       card.innerHTML = `
-        <div class="key-card-header">
+        <div class="key-header">
           <div>
-            <div class="key-title">${escapeHtml(k.sku)} <span class="text-muted">(${escapeHtml(k.name)})</span></div>
+            <div class="key-name">${escapeHtml(k.sku)} <span style="color: var(--text-muted); font-weight: normal;">(${escapeHtml(k.name)})</span></div>
             <div class="key-desc">${escapeHtml(k.description)}</div>
           </div>
           <span class="badge ${badgeClass}">${k.type.toUpperCase()}</span>
         </div>
-        <div class="key-box ${isOOB ? 'oob-format' : ''}">
+        <div class="key-box ${isOOB ? 'oob' : ''}">
           <span class="key-text">${escapeHtml(k.key)}</span>
-          <button class="btn-copy" data-key="${escapeHtml(k.key)}">📋 Копировать</button>
+          <button class="btn btn-secondary btn-sm btn-copy" data-key="${escapeHtml(k.key)}">📋 Копировать</button>
         </div>
       `;
 
       keysGrid.appendChild(card);
     });
 
-    // Copy event handlers
     keysGrid.querySelectorAll('.btn-copy').forEach(btn => {
       btn.addEventListener('click', () => {
         copyToClipboard(btn.dataset.key);
@@ -225,101 +234,104 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Copy all keys
-  btnCopyAll.addEventListener('click', () => {
-    if (!currentGeneratedData || !currentGeneratedData.keys) return;
+  if (btnCopyAll) {
+    btnCopyAll.addEventListener('click', () => {
+      if (!currentGeneratedData || !currentGeneratedData.keys) return;
 
-    let text = `Supermicro Keys for MAC: ${currentGeneratedData.mac_formatted} (${currentGeneratedData.mac_clean})\n`;
-    text += `=`.repeat(50) + `\n\n`;
+      let text = `Supermicro Keys for MAC: ${currentGeneratedData.mac_formatted} (${currentGeneratedData.mac_clean})\n`;
+      text += `=`.repeat(50) + `\n\n`;
 
-    currentGeneratedData.keys.forEach(k => {
-      text += `[${k.sku}] ${k.name}\nKey: ${k.key}\n\n`;
+      currentGeneratedData.keys.forEach(k => {
+        text += `[${k.sku}] ${k.name}\nKey: ${k.key}\n\n`;
+      });
+
+      copyToClipboard(text, 'Все ключи скопированы в буфер обмена!');
     });
-
-    copyToClipboard(text, 'Все ключи скопированы в буфер обмена!');
-  });
-
+  }
 
   // ==========================================
-  // MODE 3: Decoder & Bruteforce
+  // VIEW 3: Decoder & Bruteforce
   // ==========================================
-  btnDecode.addEventListener('click', async () => {
-    const mac = decodeMac.value.trim();
-    const key = decodeKey.value.trim();
+  if (btnDecode) {
+    btnDecode.addEventListener('click', async () => {
+      const mac = decodeMac.value.trim();
+      const key = decodeKey.value.trim();
 
-    if (!mac || !key) {
-      showToast('Введите MAC адрес и строку ключа Base64', 'error');
-      return;
-    }
-
-    btnDecode.disabled = true;
-    decodeResult.classList.add('hidden');
-
-    try {
-      const resp = await fetch('/api/decode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mac, key })
-      });
-
-      const data = await resp.json();
-
-      if (data.error) {
-        decodeResult.innerHTML = `<div class="text-muted" style="color: var(--accent-rose)">Ошибка: ${escapeHtml(data.error)}</div>`;
-      } else {
-        decodeResult.innerHTML = `
-          <h3 style="margin-bottom: 0.5rem; color: var(--accent-cyan)">Атрибуты расшифрованного ключа:</h3>
-          <pre class="code-font" style="background: rgba(10,14,23,0.9); padding: 1rem; border-radius: 8px; border: 1px solid var(--panel-border); overflow-x: auto;">${JSON.stringify(data, null, 2)}</pre>
-        `;
+      if (!mac || !key) {
+        showToast('Введите MAC адрес и строку ключа Base64', 'error');
+        return;
       }
-      decodeResult.classList.remove('hidden');
-    } catch (err) {
-      showToast('Ошибка обращения к серверу: ' + err.message, 'error');
-    } finally {
-      btnDecode.disabled = false;
-    }
-  });
 
-  btnBrute.addEventListener('click', async () => {
-    const key = bruteKey.value.trim();
-    const type = bruteType.value;
+      btnDecode.disabled = true;
+      decodeResult.classList.add('hidden');
 
-    if (!key) {
-      showToast('Введите строку ключа для подбора MAC', 'error');
-      return;
-    }
+      try {
+        const resp = await fetch('/api/decode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mac, key })
+        });
 
-    btnBrute.disabled = true;
-    btnBrute.innerHTML = `⌛ Выполняется поиск по блокам OUI Supermicro...`;
-    bruteResult.classList.add('hidden');
+        const data = await resp.json();
 
-    try {
-      const resp = await fetch('/api/bruteforce', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, type })
-      });
-
-      const data = await resp.json();
-
-      if (data.error) {
-        bruteResult.innerHTML = `<div class="text-muted" style="color: var(--accent-rose)">Подбор завершен: ${escapeHtml(data.error)}</div>`;
-      } else {
-        bruteResult.innerHTML = `
-          <div style="font-size: 1.1rem; color: #34d399">
-            🎉 Найден совпадающий MAC: <strong class="code-font" style="font-size: 1.3rem;">${escapeHtml(data.mac)}</strong>
-          </div>
-        `;
+        if (data.error) {
+          decodeResult.innerHTML = `<div style="color: var(--accent-red)">Ошибка: ${escapeHtml(data.error)}</div>`;
+        } else {
+          decodeResult.innerHTML = `
+            <div style="margin-bottom: 0.4rem; color: var(--accent-cyan); font-weight: 600;">Атрибуты расшифрованного ключа:</div>
+            <pre class="log-box">${JSON.stringify(data, null, 2)}</pre>
+          `;
+        }
+        decodeResult.classList.remove('hidden');
+      } catch (err) {
+        showToast('Ошибка обращения к серверу: ' + err.message, 'error');
+      } finally {
+        btnDecode.disabled = false;
       }
-      bruteResult.classList.remove('hidden');
-    } catch (err) {
-      showToast('Ошибка при подборе MAC: ' + err.message, 'error');
-    } finally {
-      btnBrute.disabled = false;
-      btnBrute.innerHTML = `🔓 Начать подбор MAC`;
-    }
-  });
+    });
+  }
 
+  if (btnBrute) {
+    btnBrute.addEventListener('click', async () => {
+      const key = bruteKey.value.trim();
+      const type = bruteType.value;
+
+      if (!key) {
+        showToast('Введите строку ключа для подбора MAC', 'error');
+        return;
+      }
+
+      btnBrute.disabled = true;
+      btnBrute.innerHTML = `⌛ Поиск по OUI Supermicro...`;
+      bruteResult.classList.add('hidden');
+
+      try {
+        const resp = await fetch('/api/bruteforce', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, type })
+        });
+
+        const data = await resp.json();
+
+        if (data.error) {
+          bruteResult.innerHTML = `<div style="color: var(--accent-red)">Подбор завершен: ${escapeHtml(data.error)}</div>`;
+        } else {
+          bruteResult.innerHTML = `
+            <div style="font-size: 1.05rem; color: #34d399">
+              🎉 Найден совпадающий MAC: <strong style="font-family: var(--font-mono); font-size: 1.2rem;">${escapeHtml(data.mac)}</strong>
+            </div>
+          `;
+        }
+        bruteResult.classList.remove('hidden');
+      } catch (err) {
+        showToast('Ошибка при подборе MAC: ' + err.message, 'error');
+      } finally {
+        btnBrute.disabled = false;
+        btnBrute.innerHTML = `🔓 Начать подбор MAC`;
+      }
+    });
+  }
 
   // Helpers
   function copyToClipboard(text, message = 'Скопировано в буфер обмена!') {
@@ -332,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showToast(msg, type = 'success') {
     toast.textContent = msg;
-    toast.style.background = type === 'error' ? 'rgba(244, 63, 94, 0.95)' : 'rgba(16, 185, 129, 0.95)';
+    toast.style.background = type === 'error' ? '#ef4444' : '#10b981';
     toast.classList.remove('hidden');
 
     setTimeout(() => {

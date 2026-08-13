@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"embed"
 	"encoding/json"
@@ -27,6 +28,11 @@ import (
 
 //go:embed static/*
 var staticFS embed.FS
+
+// bruteForceSem limits MAC bruteforce searches to one at a time. Each search is
+// CPU-bound (up to ~117M AES decryptions), so serializing prevents concurrent
+// requests from exhausting the host.
+var bruteForceSem = make(chan struct{}, 1)
 
 type GenerateRequest struct {
 	MAC string `json:"mac"`
@@ -115,24 +121,40 @@ func main() {
 		port = "8080"
 	}
 
+	// Host defaults to localhost so the standalone .exe is not reachable from
+	// the network. The Docker image sets HOST=0.0.0.0 explicitly to publish
+	// the port. This mitigates the SSRF surface of the activation endpoints.
+	host := os.Getenv("HOST")
+	if host == "" {
+		host = "127.0.0.1"
+	}
+
 	// Serve embedded static files
 	subFS, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		log.Fatalf("Failed to initialize embedded static files: %v", err)
 	}
-	http.Handle("/", http.FileServer(http.FS(subFS)))
 
-	http.HandleFunc("/api/generate", handleGenerate)
-	http.HandleFunc("/api/decode", handleDecode)
-	http.HandleFunc("/api/bruteforce", handleBruteForce)
-	http.HandleFunc("/api/skus", handleListSKUs)
-	http.HandleFunc("/api/activate", handleActivate)
-	http.HandleFunc("/api/auto-activate", handleAutoActivate)
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.FS(subFS)))
+	mux.HandleFunc("/api/generate", handleGenerate)
+	mux.HandleFunc("/api/decode", handleDecode)
+	mux.HandleFunc("/api/bruteforce", handleBruteForce)
+	mux.HandleFunc("/api/skus", handleListSKUs)
+	mux.HandleFunc("/api/activate", handleActivate)
+	mux.HandleFunc("/api/auto-activate", handleAutoActivate)
 
+	handler := withSecurity(mux)
+
+	addr := host + ":" + port
 	log.Printf("==========================================================")
 	log.Printf("Supermicro License Generator & SUM Activator Web App")
 	log.Printf("Running on OS: %s/%s", runtime.GOOS, runtime.GOARCH)
+	log.Printf("Listening on: %s", addr)
 	log.Printf("Web Interface URL: http://localhost:%s", port)
+	if authUser, _ := basicAuthCreds(); authUser != "" {
+		log.Printf("HTTP Basic Auth: ENABLED (user %q)", authUser)
+	}
 	sumPath := findSUMBinary()
 	if sumPath != "" {
 		log.Printf("SUM Binary Tool Detected: %s", sumPath)
@@ -141,15 +163,93 @@ func main() {
 	}
 	log.Printf("==========================================================")
 
-	// Automatically open default browser in Windows / GUI environments
-	go func() {
-		time.Sleep(500 * time.Millisecond)
-		openBrowser(fmt.Sprintf("http://localhost:%s", port))
-	}()
+	// Automatically open the default browser in desktop/GUI environments.
+	// Skipped on headless/server deployments (set NO_BROWSER=1, as the
+	// Docker image does) to avoid a spurious "xdg-open not found" error.
+	if os.Getenv("NO_BROWSER") == "" {
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			openBrowser(fmt.Sprintf("http://localhost:%s", port))
+		}()
+	}
 
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		// No overall WriteTimeout: activation and bruteforce handlers may run
+		// for up to ~2 minutes and stream their result at the end.
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+// basicAuthCreds returns the optional HTTP Basic Auth credentials configured
+// via BASIC_AUTH_USER / BASIC_AUTH_PASS. When the user is empty, auth is off.
+func basicAuthCreds() (string, string) {
+	return os.Getenv("BASIC_AUTH_USER"), os.Getenv("BASIC_AUTH_PASS")
+}
+
+// withSecurity wraps the mux with cross-cutting protections:
+//   - a request body size limit,
+//   - optional HTTP Basic Auth,
+//   - a CSRF guard for state-changing API calls (JSON content-type + a
+//     same-origin check on Sec-Fetch-Site / Origin), which stops a malicious
+//     web page from driving the activation endpoints of a locally bound server.
+func withSecurity(next http.Handler) http.Handler {
+	authUser, authPass := basicAuthCreds()
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Cap request bodies to keep JSON decoding cheap and bounded.
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
+
+		if authUser != "" {
+			u, p, ok := r.BasicAuth()
+			if !ok || subtle.ConstantTimeCompare([]byte(u), []byte(authUser)) != 1 ||
+				subtle.ConstantTimeCompare([]byte(p), []byte(authPass)) != 1 {
+				w.Header().Set("WWW-Authenticate", `Basic realm="Supermicro License Generator"`)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+
+		if strings.HasPrefix(r.URL.Path, "/api/") && r.Method == http.MethodPost {
+			if !isSameOrigin(r) {
+				http.Error(w, "Cross-origin request blocked", http.StatusForbidden)
+				return
+			}
+			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+				http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// isSameOrigin rejects requests a browser marks as cross-site. It trusts the
+// Fetch metadata header when present (modern browsers), and otherwise falls
+// back to comparing the Origin host with the request Host. Non-browser
+// clients (curl, SUM tooling) send neither header and are allowed through.
+func isSameOrigin(r *http.Request) bool {
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "same-origin", "same-site", "none":
+		return true
+	case "cross-site":
+		return false
+	}
+
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true // no Origin header: not a browser-initiated cross-site call
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return u.Host == r.Host
 }
 
 func openBrowser(urlStr string) {
@@ -343,7 +443,18 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 	} else {
 		sid, err := nonjson.SoftwareIdentifiers.BySKU(req.SKU)
 		if err != nil {
-			sid = nonjson.SoftwareIdentifiers.ALL
+			// Fail loudly instead of silently activating a different license
+			// than the caller asked for.
+			json.NewEncoder(w).Encode(AutoActivateResponse{
+				Success:      false,
+				MACDetected:  macStr,
+				MACClean:     macClean,
+				MACFormatted: macFormatted,
+				SKU:          req.SKU,
+				Error:        fmt.Sprintf("Неизвестный SKU '%s'. Выберите один из поддерживаемых типов лицензий.", req.SKU),
+				Output:       logStep1,
+			})
+			return
 		}
 		pk := nonjson.NewDefaultProductKey()
 		pk.SoftwareIdentifier = *sid
@@ -535,9 +646,13 @@ func fetchMACViaRedfish(ctx context.Context, ip, username, password string) (str
 		Timeout:   10 * time.Second,
 	}
 
+	// EthernetInterfaces is queried first: it is the resource that actually
+	// carries the BMC MAC in a labelled MACAddress/PermanentMACAddress field,
+	// so a match there is trustworthy. The Managers/Systems endpoints are
+	// fallbacks only.
 	urls := []string{
-		fmt.Sprintf("https://%s/redfish/v1/Managers/1", ip),
 		fmt.Sprintf("https://%s/redfish/v1/Managers/1/EthernetInterfaces/1", ip),
+		fmt.Sprintf("https://%s/redfish/v1/Managers/1", ip),
 		fmt.Sprintf("https://%s/redfish/v1/Systems/1", ip),
 	}
 
@@ -554,7 +669,14 @@ func fetchMACViaRedfish(ctx context.Context, ip, username, password string) (str
 			continue
 		}
 		body, _ := io.ReadAll(resp.Body)
+		status := resp.StatusCode
 		resp.Body.Close()
+
+		// Only parse successful responses. A 401/404 body must not be scanned
+		// for hex that could be mistaken for a MAC address.
+		if status < 200 || status >= 300 {
+			continue
+		}
 
 		mac := extractMACFromText(string(body))
 		if mac != "" {
@@ -565,6 +687,12 @@ func fetchMACViaRedfish(ctx context.Context, ip, username, password string) (str
 	return "", "Redfish не вернул MAC-адрес", fmt.Errorf("mac not found in redfish")
 }
 
+// extractMACFromText pulls a BMC MAC address out of SUM output, IPMI Web CGI
+// pages, or Redfish JSON. It deliberately only accepts MACs that are either
+// explicitly labelled (BMC MAC / MAC Address / PermanentMACAddress) or written
+// in canonical colon/dash-separated form. The previous bare "any 12 hex
+// characters" fallback was removed: it happily matched a slice of a UUID,
+// serial number, or signature and could yield a key for the wrong MAC.
 func extractMACFromText(text string) string {
 	reExplicit := regexp.MustCompile(`(?i)(?:BMC\s*MAC|MAC\s*Address|PermanentMACAddress)\s*["':=]?\s*([0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}|[0-9A-Fa-f]{12})`)
 	matches := reExplicit.FindStringSubmatch(text)
@@ -576,15 +704,6 @@ func extractMACFromText(text string) string {
 	genMatches := reGeneric.FindStringSubmatch(text)
 	if len(genMatches) > 1 {
 		return cleanMACString(genMatches[1])
-	}
-
-	reHex12 := regexp.MustCompile(`(?i)\b([0-9A-Fa-f]{12})\b`)
-	hexMatches := reHex12.FindAllString(text, -1)
-	for _, m := range hexMatches {
-		clean := cleanMACString(m)
-		if len(clean) == 12 {
-			return clean
-		}
 	}
 
 	return ""
@@ -658,13 +777,28 @@ func handleBruteForce(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A full search is up to 7 x 16.7M decryptions and is CPU-bound. Limit it
+	// to one at a time so concurrent requests cannot pile up and exhaust the
+	// CPU, and bound each search with a timeout tied to the request context so
+	// a client disconnect stops the worker goroutines.
+	select {
+	case bruteForceSem <- struct{}{}:
+		defer func() { <-bruteForceSem }()
+	default:
+		json.NewEncoder(w).Encode(BruteForceResponse{Error: "Сервер уже выполняет подбор MAC. Повторите попытку позже."})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+
 	var foundMAC string
 	var err error
 
 	if req.Type == "nonjson" {
-		foundMAC, err = nonjson.BruteForceMACAddress(req.Key)
+		foundMAC, err = nonjson.BruteForceMACAddressContext(ctx, req.Key)
 	} else {
-		foundMAC, err = oob.BruteForceMACAddress(req.Key)
+		foundMAC, err = oob.BruteForceMACAddressContext(ctx, req.Key)
 	}
 
 	if err != nil {

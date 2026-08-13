@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.21'
 
@@ -29,23 +29,27 @@ jobs:
           GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o supermicro-license-generator.exe main.go
 
       - name: Upload Windows Executable Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: supermicro-license-generator-windows
           path: supermicro-license-generator.exe
 
-      - name: Create or Update GitHub Release
+      # Publish a GitHub Release only for tag pushes (e.g. `git tag v1.2.0`),
+      # using the pushed tag. Every push to main still builds and uploads the
+      # artifact above for validation, but does not overwrite a release.
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
-        continue-on-error: true
         with:
-          tag_name: v1.0.0
-          name: Supermicro License Generator v1.0.0
+          tag_name: ${{ github.ref_name }}
+          name: Supermicro License Generator ${{ github.ref_name }}
           body: |
-            ## ⚡ Supermicro License Generator & SUM Activator v1.0.0
+            ## ⚡ Supermicro License Generator & SUM Activator ${{ github.ref_name }}
 
             ### 🖥️ Windows Standalone App (.exe)
             - Download `supermicro-license-generator.exe` below.
-            - Place it alongside `sum_2.15.0_Win_x86_64` folder containing `sum.exe`.
+            - To use direct SUM activation, place it alongside the
+              `sum_2.15.0_Win_x86_64` folder containing `sum.exe`.
             - Double-click `supermicro-license-generator.exe` to run.
 
             ### 🐳 Docker Container
@@ -58,7 +62,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -81,11 +85,12 @@ jobs:
         with:
           images: ghcr.io/${{ env.REPO_LC }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
             type=sha,format=short
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
