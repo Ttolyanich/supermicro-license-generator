@@ -7,8 +7,11 @@ on:
 
 jobs:
   build-windows:
-    name: Build Standalone Windows EXE
+    name: Build Standalone Windows EXE & Create Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,6 +30,23 @@ jobs:
         with:
           name: supermicro-license-generator-windows
           path: supermicro-license-generator.exe
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: Supermicro License Generator v1.0.0
+          body: |
+            ## ⚡ Supermicro License Generator & SUM Activator v1.0.0
+
+            ### 🖥️ Windows Standalone App (.exe)
+            - Download `supermicro-license-generator.exe` below.
+            - Place it alongside `sum_2.15.0_Win_x86_64` folder containing `sum.exe`.
+            - Double-click `supermicro-license-generator.exe` to run.
+
+            ### 🐳 Docker Container
+            `docker pull ghcr.io/ttolyanich/supermicro-license-generator:latest`
+          files: supermicro-license-generator.exe
 
   build-docker:
     name: Build and Push Docker Image

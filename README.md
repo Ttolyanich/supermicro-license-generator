@@ -5,7 +5,15 @@
 ![Docker Ready](https://img.shields.io/badge/Docker-Ready-blue)
 ![Go](https://img.shields.io/badge/Go-1.21-00ADD8)
 ![SUM 2.15](https://img.shields.io/badge/SUM-2.15.0-green)
-![Windows Standalone](https://img.shields.io/badge/Windows-Standalone--EXE-0078D6)
+[![Download EXE](https://img.shields.io/badge/Download-Windows--EXE-0078D6?logo=windows&logoColor=white)](https://github.com/Ttolyanich/supermicro-license-generator/releases/download/v1.0.0/supermicro-license-generator.exe)
+
+---
+
+## 💾 Прямые ссылки на скачивание (Windows)
+
+- 📥 **[Скачать supermicro-license-generator.exe (Прямая ссылка v1.0.0)](https://github.com/Ttolyanich/supermicro-license-generator/releases/download/v1.0.0/supermicro-license-generator.exe)**
+- 📦 **[Перейти к странице релизов (GitHub Releases)](https://github.com/Ttolyanich/supermicro-license-generator/releases)**
+- ☁️ **[Скачать SUM 2.15.0 для Windows (Google Drive Зеркало)](https://drive.google.com/file/d/1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli/view?usp=sharing)**
 
 ---
 
@@ -14,7 +22,6 @@
 Проект разработан на базе утилиты [zsrv/supermicro-product-key](https://github.com/zsrv/supermicro-product-key) и полностью расширен графическим веб-интерфейсом, автоматическим считыванием MAC-адресов с BMC, очистителем MAC-форматов и встроенным исполнителем утилиты Supermicro SUM (Linux & Windows).
 
 - **Официальный репозиторий:** [https://github.com/Ttolyanich/supermicro-license-generator](https://github.com/Ttolyanich/supermicro-license-generator)
-- **Зеркало архива SUM 2.15 (Google Drive):** [https://drive.google.com/file/d/1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli/view?usp=sharing](https://drive.google.com/file/d/1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli/view?usp=sharing)
 
 ---
 
@@ -38,9 +45,9 @@
 
 Весь веб-интерфейс (HTML/CSS/JS) зашит **прямо внутрь одного `.exe` файла**. Ему не требуются внешние папки или установка стороннего ПО.
 
-### Как запустить на Windows:
+### Быстрый запуск на Windows:
 
-1. Зайдите в раздел **[GitHub Actions Artifacts](https://github.com/Ttolyanich/supermicro-license-generator/actions)** и скачайте готовую сборку `supermicro-license-generator-windows` (`supermicro-license-generator.exe`).
+1. Скачайте файл **[supermicro-license-generator.exe](https://github.com/Ttolyanich/supermicro-license-generator/releases/download/v1.0.0/supermicro-license-generator.exe)**.
 2. Убедитесь, что папка `sum_2.15.0_Win_x86_64` (содержит `sum.exe`) находится в одной директории с `.exe` файлом.
 3. Запустите **`supermicro-license-generator.exe`** двойным кликом.
 4. Приложение автоматически поднимет веб-сервер и **само откроет ваш браузер** по адресу `http://localhost:8080`!
@@ -56,13 +63,18 @@ docker compose up -d --build
 ```
 Веб-интерфейс откроется по адресу: **`http://localhost:8080`**
 
+Или используйте готовый образ из GitHub Packages:
+```bash
+docker run -d -p 8080:8080 --name supermicro-license-generator ghcr.io/ttolyanich/supermicro-license-generator:latest
+```
+
 ---
 
 ## 📁 Структура проекта
 
 ```text
 supermicro-license-generator/
-├── .github/workflows/docker-build.yml # Автоматическая сборка Docker образа & Windows .exe
+├── .github/workflows/docker-build.yml # Автоматическая сборка Docker образа & Windows .exe Release
 ├── Dockerfile                          # Многоэтапная сборка контейнера (Debian + SUM Linux)
 ├── docker-compose.yml                  # Конфигурация запуска контейнера
 ├── main.go                             # REST API на Go с вшитым фронтендом (//go:embed)
