@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -20,6 +22,9 @@ import (
 	"github.com/zsrv/supermicro-product-key/pkg/nonjson"
 	"github.com/zsrv/supermicro-product-key/pkg/oob"
 )
+
+//go:embed static/*
+var staticFS embed.FS
 
 type GenerateRequest struct {
 	MAC string `json:"mac"`
@@ -107,7 +112,12 @@ func main() {
 		port = "8080"
 	}
 
-	http.Handle("/", http.FileServer(http.Dir("./static")))
+	// Serve embedded static files
+	subFS, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		log.Fatalf("Failed to initialize embedded static files: %v", err)
+	}
+	http.Handle("/", http.FileServer(http.FS(subFS)))
 
 	http.HandleFunc("/api/generate", handleGenerate)
 	http.HandleFunc("/api/decode", handleDecode)
@@ -124,12 +134,33 @@ func main() {
 	if sumPath != "" {
 		log.Printf("SUM Binary Tool Detected: %s", sumPath)
 	} else {
-		log.Printf("WARNING: SUM Tool not found. Key generation works, but direct SUM activation will require SUM binary.")
+		log.Printf("WARNING: SUM Tool not found. Key generation works, but direct SUM activation requires SUM binary.")
 	}
 	log.Printf("==========================================================")
 
+	// Automatically open default browser in Windows / GUI environments
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		openBrowser(fmt.Sprintf("http://localhost:%s", port))
+	}()
+
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+func openBrowser(url string) {
+	var err error
+	switch runtime.GOOS {
+	case "windows":
+		err = exec.Command("cmd", "/c", "start", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default: // linux, freebsd
+		err = exec.Command("xdg-open", url).Start()
+	}
+	if err != nil {
+		log.Printf("Could not open browser automatically: %v", err)
 	}
 }
 

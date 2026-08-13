@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build Docker Image and Windows Executable
 
 on:
   push:
@@ -6,7 +6,30 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
+    name: Build Standalone Windows EXE
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build Windows Executable
+        run: |
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o supermicro-license-generator.exe main.go
+
+      - name: Upload Windows Executable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supermicro-license-generator-windows
+          path: supermicro-license-generator.exe
+
+  build-docker:
+    name: Build and Push Docker Image
     runs-on: ubuntu-latest
     permissions:
       contents: read
