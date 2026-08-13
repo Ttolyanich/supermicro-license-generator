@@ -30,6 +30,9 @@ import (
 	"github.com/zsrv/supermicro-product-key/pkg/oob"
 )
 
+// appVersion is the release version of this application, shown at startup.
+const appVersion = "1.1.0"
+
 //go:embed static/*
 var staticFS embed.FS
 
@@ -154,7 +157,7 @@ func main() {
 
 	addr := host + ":" + port
 	log.Printf("==========================================================")
-	log.Printf("Supermicro License Generator & SUM Activator Web App")
+	log.Printf("Supermicro License Generator & SUM Activator Web App v%s", appVersion)
 	log.Printf("Running on OS: %s/%s", runtime.GOOS, runtime.GOARCH)
 	log.Printf("Listening on: %s", addr)
 	log.Printf("Web Interface URL: http://localhost:%s", port)
