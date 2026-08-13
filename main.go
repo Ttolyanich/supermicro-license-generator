@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ type AutoActivateRequest struct {
 	IP       string `json:"ip"`
 	Username string `json:"username"`
 	Password string `json:"password"`
-	SKU      string `json:"sku"` // e.g. "SFT-DCMS-SINGLE", "SFT-OOB-LIC", or "ALL"
+	SKU      string `json:"sku"`
 }
 
 type AutoActivateResponse struct {
@@ -115,7 +116,18 @@ func main() {
 	http.HandleFunc("/api/activate", handleActivate)
 	http.HandleFunc("/api/auto-activate", handleAutoActivate)
 
-	log.Printf("Server starting on port %s...", port)
+	log.Printf("==========================================================")
+	log.Printf("Supermicro License Generator & SUM Activator Web App")
+	log.Printf("Running on OS: %s/%s", runtime.GOOS, runtime.GOARCH)
+	log.Printf("Web Interface URL: http://localhost:%s", port)
+	sumPath := findSUMBinary()
+	if sumPath != "" {
+		log.Printf("SUM Binary Tool Detected: %s", sumPath)
+	} else {
+		log.Printf("WARNING: SUM Tool not found. Key generation works, but direct SUM activation will require SUM binary.")
+	}
+	log.Printf("==========================================================")
+
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
@@ -139,7 +151,6 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Clean input MAC address (remove colons, dashes, spaces)
 	cleanMACInput := cleanMACString(macStr)
 
 	hwAddr, err := netinternal.ParseHardwareAddr(cleanMACInput)
@@ -248,7 +259,6 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	// Step 1: Automatically fetch/read BMC MAC address from BMC
 	macStr, logStep1, err := fetchBMCMAC(ctx, req.IP, req.Username, req.Password)
 	if err != nil {
 		json.NewEncoder(w).Encode(AutoActivateResponse{
@@ -274,7 +284,6 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 	macFormatted := fmt.Sprintf("%02X:%02X:%02X:%02X:%02X:%02X",
 		hwAddr[0], hwAddr[1], hwAddr[2], hwAddr[3], hwAddr[4], hwAddr[5])
 
-	// Step 2: Generate Product Key
 	var generatedKey string
 	var allKeys []KeyResult
 
@@ -289,10 +298,8 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 		}
 		generatedKey = oobKey.String()
 	} else {
-		// Non-JSON SKU
 		sid, err := nonjson.SoftwareIdentifiers.BySKU(req.SKU)
 		if err != nil {
-			// Fallback to SFT-DCMS-SINGLE
 			sid = nonjson.SoftwareIdentifiers.ALL
 		}
 		pk := nonjson.NewDefaultProductKey()
@@ -307,7 +314,6 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate all keys to return in response as well
 	oobKey, _ := oob.EncodeOOBProductKey(hwAddr)
 	if oobKey != nil {
 		allKeys = append(allKeys, KeyResult{
@@ -336,7 +342,6 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Step 3: Run SUM Activation
 	sumPath := findSUMBinary()
 	if sumPath == "" {
 		json.NewEncoder(w).Encode(AutoActivateResponse{
@@ -347,7 +352,7 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 			SKU:          req.SKU,
 			GeneratedKey: generatedKey,
 			AllKeys:      allKeys,
-			Error:        "Утилита SUM не найдена на сервере (/app/sum). Ключ сгенерирован, но не активирован.",
+			Error:        "Утилита SUM не найдена. Ключ сгенерирован, но не активирован.",
 			Output:       logStep1,
 		})
 		return
@@ -392,7 +397,6 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 func fetchBMCMAC(ctx context.Context, ip, username, password string) (string, string, error) {
 	var logs []string
 
-	// Strategy 1: Use SUM tool `-c GetBmcInfo`
 	sumPath := findSUMBinary()
 	if sumPath != "" {
 		logs = append(logs, "[SUM] Запрос GetBmcInfo...")
@@ -410,8 +414,7 @@ func fetchBMCMAC(ctx context.Context, ip, username, password string) (string, st
 		}
 	}
 
-	// Strategy 2: Redfish API
-	logs = append(logs, "[Redfish] Подключение к https://" + ip + "/redfish/v1/Managers/1...")
+	logs = append(logs, "[Redfish] Подключение к https://"+ip+"/redfish/v1/Managers/1...")
 	mac, rLogs, err := fetchMACViaRedfish(ctx, ip, username, password)
 	logs = append(logs, rLogs)
 	if err == nil && mac != "" {
@@ -461,21 +464,18 @@ func fetchMACViaRedfish(ctx context.Context, ip, username, password string) (str
 }
 
 func extractMACFromText(text string) string {
-	// 1. Look for explicit BMC MAC patterns first
 	reExplicit := regexp.MustCompile(`(?i)(?:BMC\s*MAC|MAC\s*Address|PermanentMACAddress)\s*["':=]?\s*([0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}|[0-9A-Fa-f]{12})`)
 	matches := reExplicit.FindStringSubmatch(text)
 	if len(matches) > 1 {
 		return cleanMACString(matches[1])
 	}
 
-	// 2. Generic MAC pattern regex
 	reGeneric := regexp.MustCompile(`(?i)\b([0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2}[:-][0-9A-Fa-f]{2})\b`)
 	genMatches := reGeneric.FindStringSubmatch(text)
 	if len(genMatches) > 1 {
 		return cleanMACString(genMatches[1])
 	}
 
-	// 3. Raw 12-char hex string
 	reHex12 := regexp.MustCompile(`(?i)\b([0-9A-Fa-f]{12})\b`)
 	hexMatches := reHex12.FindAllString(text, -1)
 	for _, m := range hexMatches {
@@ -647,6 +647,15 @@ func findSUMBinary() string {
 	}
 
 	candidates := []string{
+		// Windows candidates
+		"sum.exe",
+		"./sum.exe",
+		"./sum_2.15.0_Win_x86_64/sum.exe",
+		"sum_2.15.0_Win_x86_64/sum.exe",
+		"sum_tool/sum.exe",
+		"../sum_2.15.0_Win_x86_64/sum.exe",
+
+		// Linux candidates
 		"/app/sum",
 		"/app/sum_tool/sum",
 		"./sum",
