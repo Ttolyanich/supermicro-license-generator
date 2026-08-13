@@ -27,9 +27,9 @@ WORKDIR /app
 COPY --from=builder /app/supermicro-license-generator .
 COPY --from=builder /app/static ./static
 
-# Download SUM 2.15 tool from Google Drive mirror using gdown
-RUN pip install --no-cache-dir gdown && \
-    gdown "1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli" -O /tmp/sum.zip && \
+# Download SUM 2.15 tool from Google Drive mirror using gdown with --break-system-packages
+RUN pip install --no-cache-dir --break-system-packages gdown && \
+    gdown "1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli" -O /tmp/sum.zip --fuzzy && \
     mkdir -p /tmp/sum_out && \
     unzip -q /tmp/sum.zip -d /tmp/sum_out && \
     mkdir -p /app/sum_tool && \
