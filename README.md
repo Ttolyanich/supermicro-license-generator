@@ -15,10 +15,11 @@
 - 📦 **[Страница релизов (GitHub Releases)](https://github.com/Ttolyanich/supermicro-license-generator/releases)**
 - 🐳 **Docker-образ:** `ghcr.io/ttolyanich/supermicro-license-generator:latest`
 
-> **Утилита SUM в проект НЕ входит** — это проприетарное ПО Supermicro, не подлежащее распространению. Скачайте её самостоятельно и выберите сборку под свою ОС (Windows или Linux):
-> - 📥 **Официальный Download Center Supermicro:** [supermicro.com/…/downloadcenter/smsdownload](https://www.supermicro.com/en/support/resources/downloadcenter/smsdownload) — выберите продукт **SUM** и нужную ОС.
+> **Утилита SUM в проект НЕ входит** — это проприетарное ПО Supermicro, не подлежащее распространению. Скачивайте её **только с официального Download Center Supermicro**:
+> - 📥 **[supermicro.com/…/downloadcenter/smsdownload](https://www.supermicro.com/en/support/resources/downloadcenter/smsdownload)** → выберите продукт **SUM** и версию под свою платформу:
+>   - **Docker (Linux-сервер)** → **Linux** версия SUM (`sum_..._Linux_x86_64`);
+>   - **Автономный `.exe` (Windows)** → **Windows** версия SUM (`sum_..._Win_x86_64`).
 > - Инструкция по активации: [store.supermicro.com — Software License Key Activation](https://store.supermicro.com/software/software-license-key-activation-usage)
-> - Зеркало (Google Drive): [SUM 2.15.0](https://drive.google.com/file/d/1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli/view?usp=sharing)
 >
 > Скачанный архив SUM можно загрузить прямо в веб-интерфейсе (раздел «Справка SKU & SUM» → «Управление утилитой SUM») — он распакуется, проверится и сохранится вне контейнера.
 
@@ -56,7 +57,7 @@
 Весь веб-интерфейс (HTML/CSS/JS) вшит **внутрь `.exe`** через `//go:embed` — внешние папки не нужны.
 
 1. Скачайте **[supermicro-license-generator.exe](https://github.com/Ttolyanich/supermicro-license-generator/releases/latest)**.
-2. Для генерации/декодирования ключей SUM не требуется. Для **активации** положите рядом с `.exe` папку `sum_2.15.0_Win_x86_64` (с `sum.exe`), скачанную по ссылкам выше, либо загрузите архив SUM прямо в веб-интерфейсе, либо укажите путь через переменную `SUM_PATH`.
+2. Для генерации/декодирования ключей SUM не требуется. Для **активации** скачайте **Windows-версию SUM** (`sum_..._Win_x86_64` с `sum.exe`) с [официального Download Center Supermicro](https://www.supermicro.com/en/support/resources/downloadcenter/smsdownload) и либо положите эту папку рядом с `.exe`, либо загрузите архив SUM прямо в веб-интерфейсе, либо укажите путь через переменную `SUM_PATH`.
 3. Запустите `.exe` двойным кликом.
 4. Приложение поднимет локальный веб-сервер на `http://localhost:8080` и откроет браузер.
 
@@ -119,7 +120,7 @@ docker run -d -p 127.0.0.1:8080:8080 --name supermicro-license-generator \
 
 > Хотите собирать из исходников — в `docker-compose.yml` закомментируйте `image:` и раскомментируйте блок `build:`, затем `docker compose up -d --build`.
 
-**Активация через SUM в Docker.** Бинарник SUM в образ не встроен. Проще всего — загрузить архив SUM прямо в веб-интерфейсе (сохранится в томе `sum_data`). Либо смонтировать существующий SUM и указать `SUM_PATH`:
+**Активация через SUM в Docker.** Бинарник SUM в образ не встроен. Скачайте **Linux-версию SUM** (`sum_..._Linux_x86_64`) с [официального Download Center Supermicro](https://www.supermicro.com/en/support/resources/downloadcenter/smsdownload). Проще всего — загрузить этот архив прямо в веб-интерфейсе (сохранится в томе `sum_data`). Либо смонтировать распакованный SUM и указать `SUM_PATH`:
 ```bash
 docker run -d -p 127.0.0.1:8080:8080 \
   -e SUM_PATH=/app/sum_tool/sum \
