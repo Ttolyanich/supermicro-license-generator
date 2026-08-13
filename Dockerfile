@@ -18,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     procps \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -25,18 +27,16 @@ WORKDIR /app
 COPY --from=builder /app/supermicro-license-generator .
 COPY --from=builder /app/static ./static
 
-# Copy local SUM folder if provided locally, or download automatically from Google Drive mirror
-COPY sum_2.15.0_Linux_x86_64* /app/sum_tool_local/
-
-RUN if [ -f /app/sum_tool_local/sum_2.15.0_Linux_x86_64/sum ]; then \
-        cp -r /app/sum_tool_local/sum_2.15.0_Linux_x86_64 /app/sum_tool; \
-    else \
-        mkdir -p /app/sum_tool && \
-        curl -sSL "https://drive.google.com/uc?export=download&id=1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli&confirm=t" -o /tmp/sum.zip || true && \
-        if [ -f /tmp/sum.zip ]; then unzip -q /tmp/sum.zip -d /tmp/sum_out 2>/dev/null && cp -r /tmp/sum_out/*/* /app/sum_tool 2>/dev/null || true; fi; \
-    fi && \
-    chmod +x /app/sum_tool/sum 2>/dev/null || true && \
-    ln -s /app/sum_tool/sum /app/sum 2>/dev/null || true
+# Download SUM 2.15 tool from Google Drive mirror using gdown
+RUN pip install --no-cache-dir gdown && \
+    gdown "1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli" -O /tmp/sum.zip && \
+    mkdir -p /tmp/sum_out && \
+    unzip -q /tmp/sum.zip -d /tmp/sum_out && \
+    mkdir -p /app/sum_tool && \
+    cp -r /tmp/sum_out/*/* /app/sum_tool/ && \
+    rm -rf /tmp/sum* && \
+    chmod +x /app/sum_tool/sum && \
+    ln -s /app/sum_tool/sum /app/sum
 
 EXPOSE 8080
 
