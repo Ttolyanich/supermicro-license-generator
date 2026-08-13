@@ -1,10 +1,15 @@
+# Proprietary Supermicro binaries (keep out of Git repo for legal compliance)
+sum
+sum_tool/
+sum_2.15.0_*
+
 # Binaries and executables
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-supermicro-web
+supermicro-license-generator
 
 # OS generated files
 .DS_Store
