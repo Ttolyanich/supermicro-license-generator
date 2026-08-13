@@ -184,7 +184,7 @@ func handleGenerate(w http.ResponseWriter, r *http.Request) {
 
 	cleanMACInput := cleanMACString(macStr)
 
-	hwAddr, err := netinternal.ParseHardwareAddr(cleanMACInput)
+	hwAddr, err := netinternal.ParseMAC(cleanMACInput)
 	if err != nil {
 		json.NewEncoder(w).Encode(GenerateResponse{
 			Error:  fmt.Sprintf("Некорректный MAC-адрес '%s'. Должно быть 12 HEX-символов.", macStr),
@@ -301,7 +301,7 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cleanMAC := cleanMACString(macStr)
-	hwAddr, err := netinternal.ParseHardwareAddr(cleanMAC)
+	hwAddr, err := netinternal.ParseMAC(cleanMAC)
 	if err != nil {
 		json.NewEncoder(w).Encode(AutoActivateResponse{
 			Success: false,
@@ -543,7 +543,7 @@ func handleDecode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cleanMAC := cleanMACString(req.MAC)
-	hwAddr, err := netinternal.ParseHardwareAddr(cleanMAC)
+	hwAddr, err := netinternal.ParseMAC(cleanMAC)
 	if err != nil {
 		json.NewEncoder(w).Encode(DecodeResponse{Error: fmt.Sprintf("Invalid MAC address: %v", err)})
 		return
