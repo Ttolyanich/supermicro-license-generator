@@ -66,23 +66,34 @@
 
 ## 🐳 Запуск в Docker (Linux / сервер)
 
+`docker-compose.yml` по умолчанию тянет **готовый образ из GHCR** (собирается в CI), а не собирает локально:
+
 ```bash
 git clone https://github.com/Ttolyanich/supermicro-license-generator.git
 cd supermicro-license-generator
-docker compose up -d --build
+docker compose up -d
+```
+
+Обновление до свежего образа:
+```bash
+docker compose pull && docker compose up -d
 ```
 
 Интерфейс: **`http://localhost:8080`** (в `docker-compose.yml` порт по умолчанию привязан к `127.0.0.1`).
 
-Готовый образ:
+Без клонирования репозитория, одной командой:
 ```bash
 docker run -d -p 127.0.0.1:8080:8080 --name supermicro-license-generator \
+  -v sum_data:/app/data \
   ghcr.io/ttolyanich/supermicro-license-generator:latest
 ```
 
-**Активация через SUM в Docker.** Бинарник SUM в образ не встроен. Смонтируйте его и укажите `SUM_PATH` (по умолчанию `/app/sum_tool/sum`):
+> Хотите собирать из исходников — в `docker-compose.yml` закомментируйте `image:` и раскомментируйте блок `build:`, затем `docker compose up -d --build`.
+
+**Активация через SUM в Docker.** Бинарник SUM в образ не встроен. Проще всего — загрузить архив SUM прямо в веб-интерфейсе (сохранится в томе `sum_data`). Либо смонтировать существующий SUM и указать `SUM_PATH`:
 ```bash
 docker run -d -p 127.0.0.1:8080:8080 \
+  -e SUM_PATH=/app/sum_tool/sum \
   -v /opt/sum_2.15.0_Linux_x86_64:/app/sum_tool:ro \
   ghcr.io/ttolyanich/supermicro-license-generator:latest
 ```

@@ -1,8 +1,12 @@
 services:
   supermicro-license-generator:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Pull the prebuilt image published by CI to GitHub Container Registry
+    # instead of building locally. Update with:  docker compose pull && docker compose up -d
+    # (To build from source instead, comment out `image:` and uncomment `build:`.)
+    image: ghcr.io/ttolyanich/supermicro-license-generator:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: supermicro-license-generator
     restart: unless-stopped
     # Bound to localhost by default: the activation endpoints can reach any
