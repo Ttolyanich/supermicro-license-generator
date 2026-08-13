@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  supermicro-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: supermicro-key-web
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
