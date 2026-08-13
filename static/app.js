@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const autoIp = document.getElementById('auto-ip');
   const autoUser = document.getElementById('auto-user');
   const autoPass = document.getElementById('auto-pass');
+  const autoMac = document.getElementById('auto-mac');
   const autoSku = document.getElementById('auto-sku');
   const btnAutoActivate = document.getElementById('btn-auto-activate');
   const autoResultContainer = document.getElementById('auto-result-container');
@@ -64,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ip = autoIp.value.trim();
     const username = autoUser.value.trim() || 'ADMIN';
     const password = autoPass.value.trim() || 'ADMIN';
+    const mac = autoMac ? autoMac.value.trim() : '';
     const sku = autoSku.value;
 
     if (!ip) {
@@ -73,14 +75,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     btnAutoActivate.disabled = true;
-    btnAutoActivate.innerHTML = `<span class="btn-icon">⌛</span> Подключение к ${escapeHtml(ip)}...`;
+    btnAutoActivate.innerHTML = `<span class="btn-icon">⌛</span> Подключение и Активация...`;
     autoResultContainer.classList.add('hidden');
 
     try {
       const resp = await fetch('/api/auto-activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip, username, password, sku })
+        body: JSON.stringify({ ip, username, password, mac, sku })
       });
 
       const data = await resp.json();
@@ -115,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Ошибка обращения к бэкенду: ' + err.message, 'error');
     } finally {
       btnAutoActivate.disabled = false;
-      btnAutoActivate.innerHTML = `<span class="btn-icon">⚡</span> Считать MAC + Сгенерировать Ключ + Активировать через SUM`;
+      btnAutoActivate.innerHTML = `<span class="btn-icon">⚡</span> Считать/Указать MAC + Сгенерировать Ключ + Активировать через SUM`;
     }
   });
 

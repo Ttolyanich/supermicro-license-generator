@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Supermicro Product Key Generator & SUM Auto-Activator</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -50,7 +51,7 @@
       <div class="card glass-panel">
         <div class="card-header">
           <h2>🚀 Автоматическая Активация Сервера по IP</h2>
-          <p class="text-muted">Укажите учетные данные IPMI. Утилита сама подключится, считает MAC-адрес с главной страницы BMC, сгенерирует ключ и активирует его через SUM.</p>
+          <p class="text-muted">Укажите учетные данные IPMI. Утилита сама подключится, считает MAC-адрес с BMC/IPMI, сгенерирует ключ и активирует его через SUM.</p>
         </div>
 
         <div class="grid-3">
@@ -68,18 +69,24 @@
           </div>
         </div>
 
-        <div class="form-group" style="margin-bottom: 1.25rem;">
-          <label for="auto-sku">Тип активируемой лицензии</label>
-          <select id="auto-sku">
-            <option value="SFT-DCMS-SINGLE" selected>SFT-DCMS-SINGLE — Full Suite (SUM, SPM, SCM) (Рекомендуется)</option>
-            <option value="SFT-OOB-LIC">SFT-OOB-LIC — OOB Management (BIOS Update via Web IPMI)</option>
-            <option value="SFT-SUM-LIC">SFT-SUM-LIC — Supermicro Update Manager License</option>
-            <option value="SFT-SPM-LIC">SFT-SPM-LIC — Supermicro Power Manager License</option>
-            <option value="SFT-SDDC-SINGLE">SFT-SDDC-SINGLE — Software Defined Data Center</option>
-          </select>
+        <div class="grid-3" style="grid-template-columns: 1fr 1fr; margin-bottom: 1.25rem;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="auto-mac">BMC MAC адрес <span class="text-muted">(Необязательно — определится сам)</span></label>
+            <input type="text" id="auto-mac" placeholder="например: ac:1f:6b:e4:b1:fa (если не указан - считается с BMC)">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="auto-sku">Тип активируемой лицензии</label>
+            <select id="auto-sku">
+              <option value="SFT-DCMS-SINGLE" selected>SFT-DCMS-SINGLE — Full Suite (SUM, SPM, SCM) (Рекомендуется)</option>
+              <option value="SFT-OOB-LIC">SFT-OOB-LIC — OOB Management (BIOS Update via Web IPMI)</option>
+              <option value="SFT-SUM-LIC">SFT-SUM-LIC — Supermicro Update Manager License</option>
+              <option value="SFT-SPM-LIC">SFT-SPM-LIC — Supermicro Power Manager License</option>
+              <option value="SFT-SDDC-SINGLE">SFT-SDDC-SINGLE — Software Defined Data Center</option>
+            </select>
+          </div>
         </div>
 
-        <button class="btn btn-primary" id="btn-auto-activate" style="width: 100%; font-size: 1.05rem; padding: 0.9rem;">
+        <button class="btn btn-primary" id="btn-auto-activate" style="width: 100%; font-size: 1.05rem; padding: 0.9rem; margin-top: 0.5rem;">
           <span class="btn-icon">⚡</span> Считать MAC + Сгенерировать Ключ + Активировать через SUM
         </button>
 
@@ -87,7 +94,7 @@
         <div id="auto-result-container" class="hidden" style="margin-top: 1.5rem;">
           <div class="results-meta glass-panel" style="margin-bottom: 1rem;">
             <div class="meta-item">
-              <span class="meta-label">Считанный BMC MAC:</span>
+              <span class="meta-label">BMC MAC адрес:</span>
               <span class="meta-value code-font" id="auto-meta-mac-fmt"></span>
             </div>
             <div class="meta-item">
@@ -111,7 +118,7 @@
           </div>
 
           <div class="form-group">
-            <label style="color: var(--accent-cyan);">Лог выполнения SUM 2.15:</label>
+            <label style="color: var(--accent-cyan);">Лог выполнения SUM 2.15 & IPMI Web:</label>
             <pre id="auto-log-output" class="code-font" style="background:#06090e; border:1px solid rgba(255,255,255,0.1); padding:1rem; border-radius:10px; color:#a7f3d0; max-height:300px; overflow-y:auto; white-space:pre-wrap;"></pre>
           </div>
         </div>

@@ -10,6 +10,8 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,6 +93,7 @@ type AutoActivateRequest struct {
 	IP       string `json:"ip"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	MAC      string `json:"mac"`
 	SKU      string `json:"sku"`
 }
 
@@ -149,15 +152,15 @@ func main() {
 	}
 }
 
-func openBrowser(url string) {
+func openBrowser(urlStr string) {
 	var err error
 	switch runtime.GOOS {
 	case "windows":
-		err = exec.Command("cmd", "/c", "start", url).Start()
+		err = exec.Command("cmd", "/c", "start", urlStr).Start()
 	case "darwin":
-		err = exec.Command("open", url).Start()
-	default: // linux, freebsd
-		err = exec.Command("xdg-open", url).Start()
+		err = exec.Command("open", urlStr).Start()
+	default:
+		err = exec.Command("xdg-open", urlStr).Start()
 	}
 	if err != nil {
 		log.Printf("Could not open browser automatically: %v", err)
@@ -290,14 +293,23 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
-	macStr, logStep1, err := fetchBMCMAC(ctx, req.IP, req.Username, req.Password)
-	if err != nil {
-		json.NewEncoder(w).Encode(AutoActivateResponse{
-			Success: false,
-			Error:   fmt.Sprintf("Не удалось автоматически считать BMC MAC адрес с %s: %v", req.IP, err),
-			Output:  logStep1,
-		})
-		return
+	var macStr string
+	var logStep1 string
+
+	if strings.TrimSpace(req.MAC) != "" {
+		macStr = req.MAC
+		logStep1 = fmt.Sprintf("[Ввод пользователя] Использован переданный BMC MAC адрес: %s", macStr)
+	} else {
+		var err error
+		macStr, logStep1, err = fetchBMCMAC(ctx, req.IP, req.Username, req.Password)
+		if err != nil {
+			json.NewEncoder(w).Encode(AutoActivateResponse{
+				Success: false,
+				Error:   fmt.Sprintf("Не удалось автоматически считать BMC MAC адрес с %s: %v. Вы можете указать MAC вручную.", req.IP, err),
+				Output:  logStep1,
+			})
+			return
+		}
 	}
 
 	cleanMAC := cleanMACString(macStr)
@@ -395,7 +407,7 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 	out, err := cmd.CombinedOutput()
 	outputStr := string(out)
 
-	fullOutput := fmt.Sprintf("[ШАГ 1] Автоматически считан BMC MAC: %s (%s)\n[ШАГ 2] Сгенерирован ключ (%s): %s\n[ШАГ 3] Результат выполнения SUM:\n%s",
+	fullOutput := fmt.Sprintf("[ШАГ 1] BMC MAC адрес: %s (%s)\n[ШАГ 2] Сгенерирован ключ (%s): %s\n[ШАГ 3] Результат выполнения SUM:\n%s",
 		macFormatted, macClean, req.SKU, generatedKey, outputStr)
 
 	if err != nil {
@@ -428,6 +440,7 @@ func handleAutoActivate(w http.ResponseWriter, r *http.Request) {
 func fetchBMCMAC(ctx context.Context, ip, username, password string) (string, string, error) {
 	var logs []string
 
+	// Strategy 1: SUM tool `-c GetBmcInfo`
 	sumPath := findSUMBinary()
 	if sumPath != "" {
 		logs = append(logs, "[SUM] Запрос GetBmcInfo...")
@@ -445,6 +458,15 @@ func fetchBMCMAC(ctx context.Context, ip, username, password string) (string, st
 		}
 	}
 
+	// Strategy 2: IPMI Web CGI scraping (/cgi/login.cgi -> /cgi/url_flag.cgi?url_flag=sys_info)
+	logs = append(logs, "[IPMI Web CGI] Авторизация на https://"+ip+"/cgi/login.cgi...")
+	macCGI, logCGI, errCGI := fetchMACViaCGILogin(ctx, ip, username, password)
+	logs = append(logs, logCGI)
+	if errCGI == nil && macCGI != "" {
+		return macCGI, strings.Join(logs, "\n"), nil
+	}
+
+	// Strategy 3: Redfish API
 	logs = append(logs, "[Redfish] Подключение к https://"+ip+"/redfish/v1/Managers/1...")
 	mac, rLogs, err := fetchMACViaRedfish(ctx, ip, username, password)
 	logs = append(logs, rLogs)
@@ -452,7 +474,56 @@ func fetchBMCMAC(ctx context.Context, ip, username, password string) (string, st
 		return mac, strings.Join(logs, "\n"), nil
 	}
 
-	return "", strings.Join(logs, "\n"), fmt.Errorf("не удалось считать MAC ни через SUM, ни через Redfish")
+	return "", strings.Join(logs, "\n"), fmt.Errorf("не удалось считать MAC ни через SUM, ни через IPMI Web CGI, ни через Redfish")
+}
+
+func fetchMACViaCGILogin(ctx context.Context, ip, username, password string) (string, string, error) {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{
+		Transport: tr,
+		Jar:       jar,
+		Timeout:   12 * time.Second,
+	}
+
+	loginURL := fmt.Sprintf("https://%s/cgi/login.cgi", ip)
+	formData := url.Values{}
+	formData.Set("name", username)
+	formData.Set("pwd", password)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", loginURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("CGI login failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	sysInfoURL := fmt.Sprintf("https://%s/cgi/url_flag.cgi?url_flag=sys_info", ip)
+	reqInfo, err := http.NewRequestWithContext(ctx, "GET", sysInfoURL, nil)
+	if err != nil {
+		return "", "", err
+	}
+
+	respInfo, err := client.Do(reqInfo)
+	if err != nil {
+		return "", "", fmt.Errorf("CGI sys_info failed: %v", err)
+	}
+	bodyInfo, _ := io.ReadAll(respInfo.Body)
+	respInfo.Body.Close()
+
+	mac := extractMACFromText(string(bodyInfo))
+	if mac != "" {
+		return mac, fmt.Sprintf("[IPMI Web CGI] MAC успешно найден на странице sys_info: %s", mac), nil
+	}
+
+	return "", "", fmt.Errorf("MAC не найден в ответе sys_info")
 }
 
 func fetchMACViaRedfish(ctx context.Context, ip, username, password string) (string, string, error) {
