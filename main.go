@@ -1,6 +1,9 @@
 package main
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"compress/gzip"
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
@@ -19,6 +22,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	netinternal "github.com/zsrv/supermicro-product-key/pkg/net"
@@ -143,6 +147,8 @@ func main() {
 	mux.HandleFunc("/api/skus", handleListSKUs)
 	mux.HandleFunc("/api/activate", handleActivate)
 	mux.HandleFunc("/api/auto-activate", handleAutoActivate)
+	mux.HandleFunc("/api/sum/status", handleSUMStatus)
+	mux.HandleFunc("/api/sum/upload", handleSUMUpload)
 
 	handler := withSecurity(mux)
 
@@ -201,8 +207,13 @@ func withSecurity(next http.Handler) http.Handler {
 	authUser, authPass := basicAuthCreds()
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Cap request bodies to keep JSON decoding cheap and bounded.
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
+		// The SUM archive upload is a large multipart request; it sets its own
+		// (much higher) body limit and is not JSON. Everything else is capped
+		// here to keep JSON decoding cheap and bounded.
+		isUpload := r.URL.Path == "/api/sum/upload"
+		if !isUpload {
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
+		}
 
 		if authUser != "" {
 			u, p, ok := r.BasicAuth()
@@ -215,13 +226,17 @@ func withSecurity(next http.Handler) http.Handler {
 		}
 
 		if strings.HasPrefix(r.URL.Path, "/api/") && r.Method == http.MethodPost {
+			// Same-origin is enforced for every state-changing API call,
+			// including the upload (which installs an executable).
 			if !isSameOrigin(r) {
 				http.Error(w, "Cross-origin request blocked", http.StatusForbidden)
 				return
 			}
-			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
-				http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
-				return
+			if !isUpload {
+				if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+					http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+					return
+				}
 			}
 		}
 
@@ -875,13 +890,24 @@ func handleActivate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// findSUMBinary resolves the SUM executable in priority order:
+//  1. SUM_PATH env override (explicit operator choice / volume mount),
+//  2. a SUM uploaded through the web UI and persisted in the data dir,
+//  3. a bundled/co-located SUM (local dev, Windows folder next to the .exe).
 func findSUMBinary() string {
 	if envPath := os.Getenv("SUM_PATH"); envPath != "" {
-		if _, err := os.Stat(envPath); err == nil {
+		if info, err := os.Stat(envPath); err == nil && !info.IsDir() {
 			return envPath
 		}
 	}
+	if p := persistedSUMPath(); p != "" {
+		return p
+	}
+	return findBundledSUM()
+}
 
+// findBundledSUM looks for a SUM binary shipped alongside the app.
+func findBundledSUM() string {
 	candidates := []string{
 		// Windows candidates
 		"sum.exe",
@@ -906,4 +932,315 @@ func findSUMBinary() string {
 	}
 
 	return ""
+}
+
+// sumInstallMu serializes SUM installs so two concurrent uploads cannot race
+// while replacing the persisted toolchain.
+var sumInstallMu sync.Mutex
+
+// sumDataDir is the persistent directory where an uploaded SUM toolchain is
+// stored. In Docker it is a mounted volume (SUM_DATA_DIR=/app/data) so the
+// installed SUM survives image rebuilds/updates. For the standalone .exe it
+// defaults to a "sum_data" folder next to the working directory.
+func sumDataDir() string {
+	if d := os.Getenv("SUM_DATA_DIR"); d != "" {
+		return d
+	}
+	return "sum_data"
+}
+
+func sumPathRecordFile() string {
+	return filepath.Join(sumDataDir(), "sumpath.txt")
+}
+
+// persistedSUMPath returns the path of a previously uploaded SUM binary, or ""
+// if none is recorded or the recorded file has gone missing.
+func persistedSUMPath() string {
+	data, err := os.ReadFile(sumPathRecordFile())
+	if err != nil {
+		return ""
+	}
+	p := strings.TrimSpace(string(data))
+	if p == "" {
+		return ""
+	}
+	if info, err := os.Stat(p); err != nil || info.IsDir() {
+		return ""
+	}
+	return p
+}
+
+func recordSUMPath(p string) error {
+	if err := os.MkdirAll(sumDataDir(), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(sumPathRecordFile(), []byte(p), 0o644)
+}
+
+// sumBinaryName is the SUM executable file name expected for the current OS.
+func sumBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "sum.exe"
+	}
+	return "sum"
+}
+
+type SUMStatusResponse struct {
+	Installed bool   `json:"installed"`
+	Path      string `json:"path,omitempty"`
+	Source    string `json:"source"` // env | uploaded | bundled | none
+	Expected  string `json:"expected_binary"`
+}
+
+func sumStatus() SUMStatusResponse {
+	st := SUMStatusResponse{Expected: sumBinaryName()}
+	if envPath := os.Getenv("SUM_PATH"); envPath != "" {
+		if info, err := os.Stat(envPath); err == nil && !info.IsDir() {
+			st.Installed, st.Path, st.Source = true, envPath, "env"
+			return st
+		}
+	}
+	if p := persistedSUMPath(); p != "" {
+		st.Installed, st.Path, st.Source = true, p, "uploaded"
+		return st
+	}
+	if p := findBundledSUM(); p != "" {
+		st.Installed, st.Path, st.Source = true, p, "bundled"
+		return st
+	}
+	st.Source = "none"
+	return st
+}
+
+func handleSUMStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sumStatus())
+}
+
+// handleSUMUpload accepts a SUM archive (.zip or .tar.gz), extracts it into the
+// persistent data dir, locates the SUM binary for the current OS and records it
+// so subsequent activations use it. The install survives container updates
+// because the data dir is a mounted volume.
+func handleSUMUpload(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	const maxUpload = 300 << 20 // 300 MiB
+	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeJSONError(w, "Не удалось прочитать загрузку (возможно, файл слишком большой): "+err.Error())
+		return
+	}
+
+	file, hdr, err := r.FormFile("archive")
+	if err != nil {
+		writeJSONError(w, "Файл архива не найден в запросе (ожидается поле 'archive')")
+		return
+	}
+	defer file.Close()
+
+	sumInstallMu.Lock()
+	defer sumInstallMu.Unlock()
+
+	dataDir := sumDataDir()
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		writeJSONError(w, "Не удалось создать каталог данных: "+err.Error())
+		return
+	}
+
+	// Buffer the upload to a temp file so ZIP (which needs random access) works.
+	tmpFile, err := os.CreateTemp(dataDir, "upload-*.bin")
+	if err != nil {
+		writeJSONError(w, "Временный файл: "+err.Error())
+		return
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+	if _, err := io.Copy(tmpFile, file); err != nil {
+		tmpFile.Close()
+		writeJSONError(w, "Ошибка сохранения загрузки: "+err.Error())
+		return
+	}
+	tmpFile.Close()
+
+	staging, err := os.MkdirTemp(dataDir, "incoming-*")
+	if err != nil {
+		writeJSONError(w, "Каталог распаковки: "+err.Error())
+		return
+	}
+	defer os.RemoveAll(staging)
+
+	if err := extractArchive(tmpPath, staging); err != nil {
+		writeJSONError(w, "Ошибка распаковки '"+hdr.Filename+"': "+err.Error())
+		return
+	}
+
+	binRel := findBinaryInTree(staging)
+	if binRel == "" {
+		writeJSONError(w, fmt.Sprintf("В архиве не найден бинарник %q. Убедитесь, что это архив SUM для %s.", sumBinaryName(), runtime.GOOS))
+		return
+	}
+
+	// Promote staging -> <dataDir>/sum, replacing any previous install.
+	finalDir := filepath.Join(dataDir, "sum")
+	if err := os.RemoveAll(finalDir); err != nil {
+		writeJSONError(w, "Не удалось очистить прежний SUM: "+err.Error())
+		return
+	}
+	if err := os.Rename(staging, finalDir); err != nil {
+		writeJSONError(w, "Не удалось установить SUM: "+err.Error())
+		return
+	}
+
+	binPath := filepath.Join(finalDir, binRel)
+	if runtime.GOOS != "windows" {
+		_ = os.Chmod(binPath, 0o755)
+	}
+	if err := recordSUMPath(binPath); err != nil {
+		writeJSONError(w, "Не удалось сохранить путь SUM: "+err.Error())
+		return
+	}
+
+	st := sumStatus()
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"message":   "SUM успешно установлен и будет использоваться для активации.",
+		"installed": st.Installed,
+		"path":      st.Path,
+		"source":    st.Source,
+	})
+}
+
+func writeJSONError(w http.ResponseWriter, msg string) {
+	json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": msg})
+}
+
+// extractArchive detects the archive format (.zip or .tar.gz) by magic bytes
+// and unpacks it into dest.
+func extractArchive(archivePath, dest string) error {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	magic := make([]byte, 4)
+	n, _ := io.ReadFull(f, magic)
+	magic = magic[:n]
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+
+	switch {
+	case len(magic) >= 4 && magic[0] == 'P' && magic[1] == 'K' && magic[2] == 0x03 && magic[3] == 0x04:
+		return extractZip(archivePath, dest)
+	case len(magic) >= 2 && magic[0] == 0x1f && magic[1] == 0x8b:
+		return extractTarGz(f, dest)
+	default:
+		return fmt.Errorf("неподдерживаемый формат архива (ожидается .zip или .tar.gz)")
+	}
+}
+
+func extractZip(archivePath, dest string) error {
+	zr, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return err
+	}
+	defer zr.Close()
+
+	for _, zf := range zr.File {
+		info := zf.FileInfo()
+		open := func() (io.ReadCloser, error) { return zf.Open() }
+		if err := writeArchiveEntry(dest, zf.Name, info.Mode(), info.IsDir(), open); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func extractTarGz(r io.Reader, dest string) error {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		info := hdr.FileInfo()
+		open := func() (io.ReadCloser, error) { return io.NopCloser(tr), nil }
+		if err := writeArchiveEntry(dest, hdr.Name, info.Mode(), info.IsDir(), open); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeArchiveEntry writes a single archive entry under dest, guarding against
+// Zip-Slip path traversal and skipping symlinks/irregular files.
+func writeArchiveEntry(dest, name string, mode fs.FileMode, isDir bool, open func() (io.ReadCloser, error)) error {
+	target := filepath.Join(dest, name)
+	cleanDest := filepath.Clean(dest) + string(os.PathSeparator)
+	if !strings.HasPrefix(filepath.Clean(target)+string(os.PathSeparator), cleanDest) {
+		return fmt.Errorf("небезопасный путь в архиве: %s", name)
+	}
+
+	if isDir {
+		return os.MkdirAll(target, 0o755)
+	}
+	// Only extract regular files; ignore symlinks, devices, etc.
+	if !mode.IsRegular() {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+
+	rc, err := open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+
+	out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	const maxPerFile = 200 << 20 // cap any single file at 200 MiB
+	if _, err := io.Copy(out, io.LimitReader(rc, maxPerFile)); err != nil {
+		return err
+	}
+	return nil
+}
+
+// findBinaryInTree returns the path (relative to root) of the SUM binary for
+// the current OS, or "" if not present in the extracted tree.
+func findBinaryInTree(root string) string {
+	want := sumBinaryName()
+	var found string
+	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || found != "" {
+			return nil
+		}
+		if !d.IsDir() && strings.EqualFold(d.Name(), want) {
+			if rel, relErr := filepath.Rel(root, path); relErr == nil {
+				found = rel
+			}
+		}
+		return nil
+	})
+	return found
 }

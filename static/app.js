@@ -71,6 +71,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const toast = document.getElementById('toast');
 
+  // SUM management elements
+  const sumBanner = document.getElementById('sum-banner');
+  const btnGotoSumUpload = document.getElementById('btn-goto-sum-upload');
+  const sumFile = document.getElementById('sum-file');
+  const btnSumUpload = document.getElementById('btn-sum-upload');
+  const sumUploadResult = document.getElementById('sum-upload-result');
+  const sumStatusDot = document.getElementById('sum-status-dot');
+  const sumStatusText = document.getElementById('sum-status-text');
+  const sidebarSumDot = document.getElementById('sidebar-sum-dot');
+  const sidebarSumText = document.getElementById('sidebar-sum-text');
+
   let currentGeneratedData = null;
 
   // ==========================================
@@ -332,6 +343,105 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // ==========================================
+  // SUM management: status, banner, upload
+  // ==========================================
+  const sourceLabels = {
+    env: 'через SUM_PATH',
+    uploaded: 'загружен через веб',
+    bundled: 'встроенный',
+    none: ''
+  };
+
+  async function refreshSUMStatus() {
+    try {
+      const resp = await fetch('/api/sum/status');
+      const st = await resp.json();
+      applySUMStatus(st);
+    } catch (err) {
+      // Network/backend issue — treat as unknown, keep banner hidden to avoid noise.
+      if (sidebarSumText) sidebarSumText.textContent = 'SUM: статус неизвестен';
+    }
+  }
+
+  function applySUMStatus(st) {
+    const installed = !!st.installed;
+
+    if (sumBanner) sumBanner.classList.toggle('hidden', installed);
+
+    if (sidebarSumDot) {
+      sidebarSumDot.classList.toggle('off', !installed);
+    }
+    if (sidebarSumText) {
+      sidebarSumText.textContent = installed ? 'SUM установлен' : 'SUM не установлен';
+    }
+
+    if (sumStatusDot) {
+      sumStatusDot.classList.toggle('off', !installed);
+    }
+    if (sumStatusText) {
+      if (installed) {
+        const src = sourceLabels[st.source] ? ` (${sourceLabels[st.source]})` : '';
+        sumStatusText.textContent = `SUM установлен${src}: ${st.path || ''}`;
+      } else {
+        sumStatusText.textContent = `SUM не найден. Ожидается бинарник «${st.expected_binary || 'sum'}» в архиве.`;
+      }
+    }
+  }
+
+  if (btnGotoSumUpload) {
+    btnGotoSumUpload.addEventListener('click', () => {
+      const docsNav = document.querySelector('.nav-item[data-view="view-docs"]');
+      if (docsNav) docsNav.click();
+      const card = document.getElementById('sum-manage-card');
+      if (card) card.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  if (btnSumUpload) {
+    btnSumUpload.addEventListener('click', async () => {
+      if (!sumFile || !sumFile.files || sumFile.files.length === 0) {
+        showToast('Выберите файл архива SUM (.zip или .tar.gz)', 'error');
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append('archive', sumFile.files[0]);
+
+      btnSumUpload.disabled = true;
+      const originalText = btnSumUpload.textContent;
+      btnSumUpload.textContent = '⌛ Загрузка и распаковка…';
+      if (sumUploadResult) sumUploadResult.classList.add('hidden');
+
+      try {
+        const resp = await fetch('/api/sum/upload', { method: 'POST', body: fd });
+        const data = await resp.json();
+
+        if (data.success) {
+          if (sumUploadResult) {
+            sumUploadResult.innerHTML = `<div style="color: #34d399;">✅ ${escapeHtml(data.message || 'SUM установлен')}<br><span style="color: var(--text-muted); font-size: 0.85rem;">${escapeHtml(data.path || '')}</span></div>`;
+            sumUploadResult.classList.remove('hidden');
+          }
+          showToast('SUM успешно установлен!', 'success');
+          refreshSUMStatus();
+        } else {
+          if (sumUploadResult) {
+            sumUploadResult.innerHTML = `<div style="color: var(--accent-red);">❌ ${escapeHtml(data.error || 'Не удалось установить SUM')}</div>`;
+            sumUploadResult.classList.remove('hidden');
+          }
+          showToast(data.error || 'Ошибка установки SUM', 'error');
+        }
+      } catch (err) {
+        showToast('Ошибка загрузки: ' + err.message, 'error');
+      } finally {
+        btnSumUpload.disabled = false;
+        btnSumUpload.textContent = originalText;
+      }
+    });
+  }
+
+  refreshSUMStatus();
 
   // Helpers
   function copyToClipboard(text, message = 'Скопировано в буфер обмена!') {

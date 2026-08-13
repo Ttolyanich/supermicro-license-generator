@@ -53,8 +53,8 @@
 
       <div class="sidebar-footer">
         <div class="status-indicator">
-          <span class="status-dot"></span>
-          <span class="status-text">SUM Engine v2.15</span>
+          <span class="status-dot" id="sidebar-sum-dot"></span>
+          <span class="status-text" id="sidebar-sum-text">Проверка SUM…</span>
         </div>
         <a href="https://github.com/Ttolyanich/supermicro-license-generator" target="_blank" rel="noopener" class="sidebar-github-link">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
@@ -65,6 +65,16 @@
 
     <!-- Main Workspace -->
     <main class="main-content">
+
+      <!-- SUM missing banner (shown across all views when SUM is not installed) -->
+      <div id="sum-banner" class="sum-banner hidden">
+        <div class="sum-banner-icon">⚠️</div>
+        <div class="sum-banner-body">
+          <div class="sum-banner-title">Утилита SUM не установлена</div>
+          <div class="sum-banner-text">Генерация и декодирование ключей работают, но <strong>активация через SUM недоступна</strong>. Загрузите архив SUM (.zip или .tar.gz), чтобы включить активацию.</div>
+        </div>
+        <button class="btn btn-primary" id="btn-goto-sum-upload">Загрузить SUM</button>
+      </div>
 
       <!-- View 1: Auto Activation by IP -->
       <section id="view-auto" class="view-panel active">
@@ -251,6 +261,25 @@
             <h1 class="page-title">Справка по SKU & SUM CLI</h1>
             <p class="page-subtitle">Полный перечень поддерживаемых пакетов лицензий и консольные команды SUM</p>
           </div>
+        </div>
+
+        <div class="card" id="sum-manage-card">
+          <div class="card-title">⚙️ Управление утилитой SUM</div>
+          <div class="sum-status-row">
+            <span class="status-dot" id="sum-status-dot"></span>
+            <span id="sum-status-text">Проверка статуса SUM…</span>
+          </div>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.75rem 0 1rem;">
+            SUM — проприетарная утилита Supermicro и в поставку не входит. Скачайте её для своей ОС
+            (<a href="https://www.supermicro.com/en/support/resources/downloadcenter/smsdownload" target="_blank" rel="noopener" style="color: var(--accent-blue);">Supermicro Download Center → SUM</a>)
+            и загрузите архив <code>.zip</code> или <code>.tar.gz</code> ниже. Файл распакуется, проверится и сохранится
+            вне контейнера (переживает обновления образа).
+          </p>
+          <div class="sum-upload-controls">
+            <input type="file" id="sum-file" accept=".zip,.tar.gz,.tgz" />
+            <button class="btn btn-primary" id="btn-sum-upload">⬆️ Загрузить и установить SUM</button>
+          </div>
+          <div id="sum-upload-result" class="hidden" style="margin-top: 1rem;"></div>
         </div>
 
         <div class="card">

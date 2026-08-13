@@ -3,6 +3,9 @@ sum
 sum_tool/
 sum_2.15.0_*
 
+# Persistent data dir where a web-uploaded SUM toolchain is stored
+sum_data/
+
 # Binaries and executables
 *.exe
 *.exe~

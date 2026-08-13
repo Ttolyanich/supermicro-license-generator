@@ -16,8 +16,11 @@
 - 🐳 **Docker-образ:** `ghcr.io/ttolyanich/supermicro-license-generator:latest`
 
 > **Утилита SUM в проект НЕ входит** — это проприетарное ПО Supermicro, не подлежащее распространению. Скачайте её самостоятельно и выберите сборку под свою ОС (Windows или Linux):
-> - Официальный источник: [store.supermicro.com — Software License Key Activation](https://store.supermicro.com/software/software-license-key-activation-usage)
+> - 📥 **Официальный Download Center Supermicro:** [supermicro.com/…/downloadcenter/smsdownload](https://www.supermicro.com/en/support/resources/downloadcenter/smsdownload) — выберите продукт **SUM** и нужную ОС.
+> - Инструкция по активации: [store.supermicro.com — Software License Key Activation](https://store.supermicro.com/software/software-license-key-activation-usage)
 > - Зеркало (Google Drive): [SUM 2.15.0](https://drive.google.com/file/d/1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli/view?usp=sharing)
+>
+> Скачанный архив SUM можно загрузить прямо в веб-интерфейсе (раздел «Справка SKU & SUM» → «Управление утилитой SUM») — он распакуется, проверится и сохранится вне контейнера.
 
 ---
 

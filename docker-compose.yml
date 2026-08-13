@@ -15,9 +15,15 @@ services:
       - PORT=8080
       - HOST=0.0.0.0
       - NO_BROWSER=1
+      - SUM_DATA_DIR=/app/data
       # - BASIC_AUTH_USER=admin
       # - BASIC_AUTH_PASS=change-me
-    # Direct SUM activation needs the (non-redistributable) SUM binary.
-    # Mount it and the app will pick it up via SUM_PATH=/app/sum_tool/sum.
-    # volumes:
-    #   - /opt/sum_2.15.0_Linux_x86_64:/app/sum_tool:ro
+    volumes:
+      # Persists a SUM toolchain uploaded via the web UI across image updates.
+      - sum_data:/app/data
+      # Alternatively, mount an existing SUM instead of uploading it, and set
+      # SUM_PATH=/app/sum_tool/sum in the environment block above:
+      # - /opt/sum_2.15.0_Linux_x86_64:/app/sum_tool:ro
+
+volumes:
+  sum_data:

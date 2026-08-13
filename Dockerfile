@@ -32,14 +32,19 @@ ENV PORT=8080
 ENV HOST=0.0.0.0
 # Headless container: do not attempt to launch a browser.
 ENV NO_BROWSER=1
+# Persistent data dir for a SUM toolchain uploaded through the web UI. Kept on a
+# volume so the installed SUM survives image rebuilds/updates.
+ENV SUM_DATA_DIR=/app/data
+VOLUME ["/app/data"]
+
 # Key generation, decoding and MAC reading (Redfish/IPMI Web) work out of the
 # box. Direct SUM activation additionally needs the proprietary SUM binary,
-# which is NOT bundled (it is not redistributable). Mount it as a volume and
-# point SUM_PATH at it, e.g.:
-#   docker run -p 8080:8080 \
-#     -v /opt/sum_2.15.0_Linux_x86_64:/app/sum_tool:ro \
-#     ghcr.io/ttolyanich/supermicro-license-generator:latest
-# The image looks for the binary at SUM_PATH first, then /app/sum_tool/sum.
-ENV SUM_PATH=/app/sum_tool/sum
+# which is NOT bundled (it is not redistributable). Provide it either by:
+#   1. uploading a SUM .zip/.tar.gz in the web UI (persisted in /app/data), or
+#   2. mounting it and pointing SUM_PATH at it, e.g.:
+#        docker run -p 127.0.0.1:8080:8080 \
+#          -e SUM_PATH=/app/sum_tool/sum \
+#          -v /opt/sum_2.15.0_Linux_x86_64:/app/sum_tool:ro \
+#          ghcr.io/ttolyanich/supermicro-license-generator:latest
 
 CMD ["./supermicro-license-generator"]
