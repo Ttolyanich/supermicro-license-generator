@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build-windows:
-    name: Build Standalone Windows EXE & Create Release
+    name: Build Standalone Windows EXE
     runs-on: ubuntu-latest
 
     steps:
@@ -36,6 +36,7 @@ jobs:
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
+        continue-on-error: true
         with:
           tag_name: v1.0.0
           name: Supermicro License Generator v1.0.0

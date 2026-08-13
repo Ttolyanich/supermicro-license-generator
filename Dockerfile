@@ -18,8 +18,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     procps \
-    python3 \
-    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -27,16 +25,14 @@ WORKDIR /app
 COPY --from=builder /app/supermicro-license-generator .
 COPY --from=builder /app/static ./static
 
-# Download SUM 2.15 tool from Google Drive mirror using gdown with --id
-RUN pip install --no-cache-dir --break-system-packages gdown && \
-    gdown --id "1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli" -O /tmp/sum.zip && \
-    mkdir -p /tmp/sum_out && \
-    unzip -q /tmp/sum.zip -d /tmp/sum_out && \
-    mkdir -p /app/sum_tool && \
-    cp -r /tmp/sum_out/*/* /app/sum_tool/ && \
-    rm -rf /tmp/sum* && \
-    chmod +x /app/sum_tool/sum && \
-    ln -s /app/sum_tool/sum /app/sum
+# Optional SUM download (resilient, does not fail build if network is restricted)
+RUN mkdir -p /app/sum_tool && \
+    (curl -sSL "https://drive.google.com/uc?export=download&id=1Vx3SUKApd5q-G7-RvHuioPPddTTBwpli&confirm=t" -o /tmp/sum.zip || true) && \
+    (unzip -q /tmp/sum.zip -d /tmp/sum_out 2>/dev/null || true) && \
+    (cp -r /tmp/sum_out/*/* /app/sum_tool/ 2>/dev/null || true) && \
+    (chmod +x /app/sum_tool/sum 2>/dev/null || true) && \
+    (ln -s /app/sum_tool/sum /app/sum 2>/dev/null || true) && \
+    rm -rf /tmp/sum*
 
 EXPOSE 8080
 
